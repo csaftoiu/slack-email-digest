@@ -43,7 +43,7 @@ class SlackScraper(object):
         """Get the channel history.
         :param channel Channel id or name
         :param oldest Timestamp of first message to retrieve, in milliseconds, inclusive. Defaults to the beginning.
-        :param latest Timestamp of last message to retrieve, in milliseconds, inclusive. Defaults to now.
+        :param latest Timestamp of last message to retrieve, in milliseconds, exclusive. Defaults to now.
         """
         if channel in self.channels:
             channel = self.get_channel_id(channel)
@@ -54,8 +54,8 @@ class SlackScraper(object):
             m = self.slack.channels.history(
                 channel,
                 count=1000,
-                oldest=oldest - 86400,
-                latest=latest,
+                oldest=oldest,
+                latest=latest - 0.1 if latest else None,  # sub a bit to exclude message right on the dot
                 inclusive=1
             )
             messages.extend(m.body['messages'])

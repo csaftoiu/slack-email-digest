@@ -92,3 +92,5 @@ ENV/
 .ropeproject
 
 foo.html
+
+digest.html

@@ -1,6 +1,9 @@
+import datetime
 import re
 
 import jinja2
+import pytz
+import tzlocal
 
 
 TEMPLATES = {
@@ -46,6 +49,7 @@ pre {
 </style>
 </head>
 <body>
+<h1>Slack Digest for {{ date }}</h1>
 {{ messages }}
 </body>
 </html>\
@@ -99,10 +103,13 @@ class HTMLRenderer:
         return self.scraper.get_username(user_id)
 
     def process_text(self, text):
-        sub_at = lambda m: self.templates['at'].render(user=self.scraper.get_username(m.group(1)))
-        sub_channel = lambda m: self.templates['channel_ref'].render(channel=self.scraper.get_channel_name(m.group(1)))
+        def sub_at(m):
+            return self.templates['at'].render(user=self.scraper.get_username(m.group(1)))
 
-        ## first all the < ... > specials
+        def sub_channel(m):
+            return self.templates['channel_ref'].render(channel=self.scraper.get_channel_name(m.group(1)))
+
+        # # first all the < ... > specials
         # sub @ references without username
         text = re.sub(r'<@(\w+)>', sub_at, text)
         # sub @ references with username, look up the most recent username anyway
@@ -121,7 +128,7 @@ class HTMLRenderer:
             m.group(1), m.group(2), m.group(1), m.group(2),
         ), text)
 
-        ## message formatting
+        # # message formatting
         # multi-tick
         text = re.sub(r'```\n?(.*)```', lambda m: '<pre>%s</pre>' % (m.group(1),), text, flags=re.DOTALL)
 
@@ -129,19 +136,18 @@ class HTMLRenderer:
         text = re.sub(r'\*(\w[^\*]+)\*(\b|\W|$)', lambda m: '<b>%s</b>%s' % (m.group(1), m.group(2)), text)
         # italic
         text = re.sub(r'_(\w[^_]+)_(\b|\W|$)', lambda m: '<i>%s</i>%s' % (m.group(1), m.group(2)), text)
-        # strikethrough
+        # strike-through
         text = re.sub(r'~(\w[^~]+\w)~(\b|\W|$)', lambda m: '<strike>%s</strike>%s' % (m.group(1), m.group(2)), text)
         # tick
         text = re.sub(r'`(\w[^`]+)`(\b|\W|$)', lambda m: '<code>%s</code>%s' % (m.group(1), m.group(2)), text)
 
-        # quotes
-        text = re.sub(r"&gt;(.*\w.*)", lambda m: '<blockquote>%s</blockquote>' % (m.group(1),), text)
+        # blockquotes
+        text = re.sub(r"\n?&gt;(.*\w.*)\n?\n?", lambda m: '<blockquote>%s</blockquote>' % (m.group(1),), text)
 
         # newline
         text = text.replace('\n', '<br>')
         # spacing
         text = re.sub(r'  ', '&nbsp;&nbsp;', text)
-
 
         return text
 
@@ -164,6 +170,26 @@ class HTMLRenderer:
         )
 
     def render_messages(self, messages):
+        start_dt = datetime.datetime.utcfromtimestamp(min(float(msg['ts']) for msg in messages))
+        end_dt = datetime.datetime.utcfromtimestamp(max(float(msg['ts']) - 1 for msg in messages))
+
+        local_tz = tzlocal.get_localzone()
+        start_dt = start_dt.replace(tzinfo=pytz.utc).astimezone(local_tz)
+        end_dt = end_dt.replace(tzinfo=pytz.utc).astimezone(local_tz)
+
+        fmt = '%A, %B %d, %Y'
+
+        start = start_dt.strftime(fmt)
+        end = end_dt.strftime(fmt)
+
+        if start == end:
+            date_str = start
+        else:
+            date_str = "%s to %s" % (start, end)
+
+        date_str = "%s (%s)" % (date_str, start_dt.strftime("%Z"))
+
         return self.templates['full_html'].render(
+            date=date_str,
             messages="\n".join(self.render_message(msg) for msg in messages),
         )
