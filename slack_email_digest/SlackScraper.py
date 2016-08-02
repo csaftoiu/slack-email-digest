@@ -32,6 +32,13 @@ class SlackScraper(object):
 
         return res['id']
 
+    def get_channel_name(self, channel_id):
+        for name, info in self.channels.items():
+            if info['id'] == channel_id:
+                return name
+
+        raise ValueError("No such channel: %s" % (channel_id,))
+
     def get_channel_history(self, channel, oldest=None, latest=None):
         """Get the channel history.
         :param channel Channel id or name

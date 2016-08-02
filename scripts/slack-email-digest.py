@@ -25,26 +25,28 @@ def main():
     args = docopt(__doc__)
 
     yest = datetime.datetime.now() - datetime.timedelta(days=1)
-
-    args['--start-ts'] = args['--start-ts'] or datetime.datetime(yest.year, yest.month, yest.day).timestamp()
-    args['--end-ts'] = args['--end-ts'] or (
-        (datetime.datetime.fromtimestamp(args['--start-ts']) + datetime.timedelta(days=1)).timestamp()
+    start_ts = args['--start-ts'] or datetime.datetime(yest.year, yest.month, yest.day).timestamp()
+    end_ts = args['--end-ts'] or (
+        (datetime.datetime.fromtimestamp(start_ts) + datetime.timedelta(days=1)).timestamp()
     )
+    token = args['--token']
+    verbose = args['--verbose']
+    out_file = args['--out-file']
 
-    if not args['--token']:
+    if not token:
         sys.exit("Must provide --token")
 
-    scraper = SlackScraper(args['--token'], verbose=args['--verbose'])
+    scraper = SlackScraper(token, verbose=verbose)
     hist = scraper.get_channel_history(
         args['--channel'],
-        oldest=args['--start-ts'], latest=args['--end-ts'])
+        oldest=start_ts, latest=end_ts)
 
     hist.sort(key=lambda msg: float(msg['ts']))
 
     renderer = HTMLRenderer(scraper)
-
-    for msg in hist:
-        print(renderer.render_message(msg))
+    # render as ascii with xmlcharrefreplace, so don't have to deal with encoding
+    with open(out_file, 'wb') as f:
+        f.write(renderer.render_messages(hist).encode('ascii', errors='xmlcharrefreplace'))
 
 
 if __name__ == '__main__':
