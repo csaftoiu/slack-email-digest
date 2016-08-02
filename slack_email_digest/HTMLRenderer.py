@@ -192,6 +192,15 @@ class HTMLRenderer:
             if username in self.redact_users:
                 text = "<i>[redacted]</i>"
 
+        # append reactions
+        if msg.get('reactions'):
+            text += "\n<span style='color: #777;'>(Reactions: %s)</span>" % (
+                ", ".join(":%s: %s from %s" % (
+                    reaction['name'], ("x%d " % len(reaction['users'])) if len(reaction['users']) > 1 else '',
+                    ", ".join("<@%s>" % user for user in reaction['users'])
+                ) for reaction in msg['reactions'])
+            )
+
         return self.templates[which].render(
             user=username,
             text=self.process_text(text),
