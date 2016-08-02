@@ -13,6 +13,7 @@ setup(
         'slacker(==0.9.24)',
         'docopt(==0.6.2)',
         'schema(==0.6.2)',
+        'jinja2(==2.8)',
     ],
 
     packages=[],
