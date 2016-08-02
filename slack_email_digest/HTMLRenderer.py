@@ -1,6 +1,7 @@
 import datetime
 import re
 
+import emoji
 import jinja2
 import pytz
 import tzlocal
@@ -80,6 +81,21 @@ pre {
 ANNOUNCEMENT_TYPES = ['channel_join', 'file_share', 'channel_topic']
 
 
+def fix_emoji():
+    """Fix emoji's aliases as they have some typos."""
+    from emoji import unicode_codes
+    for key, val in list(unicode_codes.EMOJI_UNICODE.items()):
+        unicode_codes.EMOJI_UNICODE[key.replace('-', '_')] = val
+    for key, val in list(unicode_codes.EMOJI_ALIAS_UNICODE.items()):
+        unicode_codes.EMOJI_ALIAS_UNICODE[key.replace('-', '_')] = val
+
+    unicode_codes.UNICODE_EMOJI = {v: k for k, v in unicode_codes.EMOJI_UNICODE.items()}
+    unicode_codes.UNICODE_EMOJI_ALIAS = {v: k for k, v in unicode_codes.EMOJI_ALIAS_UNICODE.items()}
+
+
+fix_emoji()
+
+
 class HTMLRenderer:
     """Given a SlackScraper, render messages to HTML suitable for display in
     an email client.
@@ -108,6 +124,12 @@ class HTMLRenderer:
 
         def sub_channel(m):
             return self.templates['channel_ref'].render(channel=self.scraper.get_channel_name(m.group(1)))
+
+        def sub_custom_emoji(m, big=False):
+            text = m.group(1)
+            if text[1:-1] in self.scraper.emojis:
+                return '<img width="%s" src="%s">' % (32 if big else 20, self.scraper.emojis[text[1:-1]])
+            return text
 
         # # first all the < ... > specials
         # sub @ references without username
@@ -149,11 +171,17 @@ class HTMLRenderer:
         # spacing
         text = re.sub(r'  ', '&nbsp;&nbsp;', text)
 
+        # emojis
+        text = emoji.emojize(text, use_aliases=True)
+        # custom emojis
+        # nothing but whitespace - big emoji
+        text = re.sub(r'^\W*(:[a-zA-Z0-9\+\-_&.ô’Åéãíç]+:)\W*$', lambda m: sub_custom_emoji(m, True), text)
+        # otherwise, small emoji
+        text = re.sub(r'(:[a-zA-Z0-9\+\-_&.ô’Åéãíç]+:)', sub_custom_emoji, text)
+
         return text
 
     def render_message(self, msg):
-        import pprint; pprint.pprint(msg)
-
         username = self.scraper.get_username(msg['user'])
         text = msg['text']
 
