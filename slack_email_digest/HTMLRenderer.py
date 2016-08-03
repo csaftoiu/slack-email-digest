@@ -28,6 +28,10 @@ TEMPLATES = {
 </table>\
 """,
 
+    'image_attachment': """\
+<img src="{{ image_url }}" width="{{ image_width }}" height="{{ image_height }}">\
+""",
+
     'at': """\
 <font color="#2a80b9">@{{ user }}</font>\
 """,
@@ -220,11 +224,18 @@ class HTMLRenderer:
             .replace(tzinfo=pytz.utc) \
             .astimezone(local_tz)
 
+        text = self.process_text(text)
+
+        # attachments
+        for attachment in msg.get('attachments', []):
+            if attachment.get('image_url'):
+                text += "<br>" + self.templates['image_attachment'].render(**attachment)
+
         return self.templates[which].render(
             user=username,
             timestamp=message_local_dt.strftime("%I:%M %p"),
             avatar=self.avatars.get(username, None),  # bot users won't have an avatar
-            text=self.process_text(text),
+            text=text,
         )
 
     def render_messages(self, messages):
