@@ -144,6 +144,10 @@ class HTMLRenderer:
         def sub_fmt(which):
             return lambda m: self.templates[which].render(text=m.group(1), after=m.group(2))
 
+        # multi-line blockquotes
+        text = re.sub(r'&gt;&gt;&gt;(.*)', lambda m: '<blockquote>%s</blockquote>' % m.group(1), text,
+                      flags=re.DOTALL)
+
         # multi-tick
         text = re.sub(r'```\n?(.*)```()', sub_fmt('pre'), text, flags=re.DOTALL)
 
