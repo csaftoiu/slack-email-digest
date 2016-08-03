@@ -13,45 +13,10 @@ from .memoize import memoize1_to_json_file
 
 TEMPLATES = {
     'full_html': """\
-<html>
-<head>
-<style type="text/css">
-body {
-    font-family: Slack-Lato,appleLogo,sans-serif;
-    font-size: .9375rem;
-    line-height: 1.375rem;
-}
-code {
-    white-space: normal;
-    color: #c25;
-    padding: 1px 3px;
-    background-color: #f7f7f9;
-    border: 1px solid #e1e1e8;
-    border-radius: 3px;
-    box-sizing: border-box;
-}
-pre {
-    margin: .5rem 0 .2rem;
-    font-size: .75rem;
-    line-height: 1.15rem;
-    background: #fbfaf8;
-    padding: .5rem;
-    display: block;
-    word-wrap: break-word;
-    white-space: pre-wrap;
-    border: 1px solid rgba(0, 0, 0, .15);
-    border-radius: 4px;
-    font-family: Monaco,Menlo,Consolas,"Courier New",monospace;
-    color: #333;
-    box-sizing: border-box;
-}
-</style>
-</head>
-<body>
+<div style="font-family: Slack-Lato,appleLogo,sans-serif; font-size: .9375rem; line-height: 1.375rem;">
 <h2>Slack Digest for {{ date }}</h2>
 {{ messages }}
-</body>
-</html>\
+</div>\
 """,
 
     'announcement': """\
@@ -74,7 +39,15 @@ pre {
 
     'channel_ref': """\
 <font color="#2a80b9">#{{ channel }}</font>\
-"""
+""",
+
+    'code': """\
+<code style="color: #c25; border: 1px solid #e1e1e8">{{ text }}</code>{{ after }}\
+""",
+
+    'pre': """\
+<pre style="margin: .5rem 0 .2rem; border: 1px solid rgba(0, 0, 0, .15);">{{ text }}</pre>{{ after }}\
+""",
 }
 
 
@@ -170,8 +143,11 @@ class HTMLRenderer:
         ), text)
 
         # # message formatting
+        def sub_fmt(which):
+            return lambda m: self.templates[which].render(text=m.group(1), after=m.group(2))
+
         # multi-tick
-        text = re.sub(r'```\n?(.*)```', lambda m: '<pre>%s</pre>' % (m.group(1),), text, flags=re.DOTALL)
+        text = re.sub(r'```\n?(.*)```()', sub_fmt('pre'), text, flags=re.DOTALL)
 
         # bold
         text = re.sub(r'\*(\w[^\*]+)\*(\b|\W|$)', lambda m: '<b>%s</b>%s' % (m.group(1), m.group(2)), text)
@@ -180,7 +156,7 @@ class HTMLRenderer:
         # strike-through
         text = re.sub(r'~(\w[^~]+\w)~(\b|\W|$)', lambda m: '<strike>%s</strike>%s' % (m.group(1), m.group(2)), text)
         # tick
-        text = re.sub(r'`(\w[^`]+)`(\b|\W|$)', lambda m: '<code>%s</code>%s' % (m.group(1), m.group(2)), text)
+        text = re.sub(r'`(\w[^`]+)`(\b|\W|$)', sub_fmt('code'), text)
 
         # blockquotes
         text = re.sub(r"\n?&gt;(.*\w.*)\n?\n?", lambda m: '<blockquote>%s</blockquote>' % (m.group(1),), text)
