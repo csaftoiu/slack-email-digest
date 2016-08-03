@@ -1,10 +1,14 @@
 import datetime
+import pprint
 import re
 
 import emoji
 import jinja2
+import pyshorteners
 import pytz
 import tzlocal
+
+from .memoize import memoize1_to_json_file
 
 
 TEMPLATES = {
@@ -38,19 +42,34 @@ pre {
     border: 1px solid rgba(0, 0, 0, .15);
     border-radius: 4px;
     font-family: Monaco,Menlo,Consolas,"Courier New",monospace;
-    color; #333;
+    color: #333;
     box-sizing: border-box;
 }
-.at-ref {
+.r-at {
     color: #2a80b9;
 }
-.channel-ref {
+.r-ch {
     color: #2a80b9;
+}
+.m-cn {
+    overflow: hidden;
+    padding: 5px 0px;
+}
+.m-av {
+    float: left;
+    padding: 2px 4px;
+}
+.m-tx {
+    overflow: hidden;
+}
+.m-ts {
+    color: #7f7f7f;
+    font-size: 85%;
 }
 </style>
 </head>
 <body>
-<h1>Slack Digest for {{ date }}</h1>
+<h2>Slack Digest for {{ date }}</h2>
 {{ messages }}
 </body>
 </html>\
@@ -63,22 +82,34 @@ pre {
 """,
 
     'message': """\
-<div>
-  <b>{{ user }}</b>: {{ text }}</b>
+<div class="m-cn">
+  <div class="m-av"><img {% if avatar %}src="{{ avatar }}"{% endif %} width="32"></div>
+  <div class="m-tx"><b>{{ user }}</b> <span class="m-ts">{{ timestamp }}</span><br>
+  {{ text }}
+  </div>
 </div>\
 """,
 
     'at': """\
-<span class="at-ref">@{{ user }}</span>\
+<span class="r-at">@{{ user }}</span>\
 """,
 
     'channel_ref': """\
-<span class="channel-ref">#{{ channel }}</span>\
+<span class="r-ch">#{{ channel }}</span>\
 """
 }
 
 
 ANNOUNCEMENT_TYPES = ['channel_join', 'file_share', 'channel_topic']
+
+
+@memoize1_to_json_file('shortened_url_cache.json')
+def get_shortened_url(url):
+    import sys
+    print("Getting shortened URL for %s..." % (url,), file=sys.stderr)
+    res = pyshorteners.Shortener('Isgd', timeout=5).short(url)
+    print("    ... %s" % (res,), file=sys.stderr)
+    return res
 
 
 def fix_emoji():
@@ -100,13 +131,15 @@ class HTMLRenderer:
     """Given a SlackScraper, render messages to HTML suitable for display in
     an email client.
     """
-    def __init__(self, scraper, redact_users=None):
+    def __init__(self, scraper, redact_users=None, redact_avatars=None):
         """
         :param scraper: A SlackScraper to get channel names, user names, etc.
         :param redact_users: List of users to redact. Defaults to ['mailclark'] to avoid
             recursion.
+        :param redact_avatars: List of users whose avatar not to include. Defaults to nobody.
         """
         self.redact_users = redact_users or ['mailclark']
+        self.redact_avatars = redact_avatars or []
 
         self.scraper = scraper
 
@@ -114,6 +147,14 @@ class HTMLRenderer:
         self.env.filters['username'] = self.filter_username
 
         self.templates = {name: self.env.from_string(template) for name, template in TEMPLATES.items()}
+
+        # map usernames to avatars
+        self.avatars = {}
+        self.load_avatars()
+
+    def load_avatars(self):
+        for name, info in self.scraper.users.items():
+            self.avatars[name] = get_shortened_url(info['profile']['image_72'])
 
     def filter_username(self, user_id):
         return self.scraper.get_username(user_id)
@@ -182,7 +223,13 @@ class HTMLRenderer:
         return text
 
     def render_message(self, msg):
-        username = self.scraper.get_username(msg['user'])
+        if 'user' in msg:
+            username = self.scraper.get_username(msg['user'])
+        elif 'bot_id' in msg:
+            username = "%s (BOT)" % self.scraper.get_bot_name(msg['bot_id'])
+        else:
+            raise ValueError("Don't know how to handle this message:\n%s" % (pprint.pformat(msg),))
+
         text = msg['text']
 
         which = 'message'
@@ -201,8 +248,15 @@ class HTMLRenderer:
                 ) for reaction in msg['reactions'])
             )
 
+        local_tz = tzlocal.get_localzone()
+        message_local_dt = datetime.datetime.utcfromtimestamp(float(msg['ts'])) \
+            .replace(tzinfo=pytz.utc) \
+            .astimezone(local_tz)
+
         return self.templates[which].render(
             user=username,
+            timestamp=message_local_dt.strftime("%I:%M %p"),
+            avatar=self.avatars.get(username, None) if username not in self.redact_avatars else [],
             text=self.process_text(text),
         )
 

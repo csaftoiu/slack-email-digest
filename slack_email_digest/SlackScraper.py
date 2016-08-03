@@ -39,6 +39,10 @@ class SlackScraper(object):
 
         raise ValueError("No such channel: %s" % (channel_id,))
 
+    @lru_cache(None)
+    def get_bot_name(self, bot_id):
+        return self.slack.bots.info(bot=bot_id).body['bot']['name']
+
     def get_channel_history(self, channel, oldest=None, latest=None):
         """Get the channel history.
         :param channel Channel id or name
