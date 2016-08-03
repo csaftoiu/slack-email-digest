@@ -22,10 +22,7 @@ import pytz
 import tzlocal
 
 from slack_email_digest import SlackScraper, HTMLRenderer
-
-
-def from_timestamp(ts):
-    return datetime.datetime.utcfromtimestamp(ts).replace(tzinfo=pytz.utc).astimezone(tzlocal.get_localzone())
+from slack_email_digest.datetime import tzdt_from_timestamp
 
 
 def main():
@@ -36,14 +33,14 @@ def main():
     if args['--start-ts']:
         start_ts = float(args['--start-ts'])
     else:
-        yest = (from_timestamp(time.time()) - datetime.timedelta(days=1))
+        yest = (tzdt_from_timestamp(time.time()) - datetime.timedelta(days=1))
         yest = yest.replace(hour=0, minute=0, second=0, microsecond=0)
         start_ts = yest.timestamp()
 
     if args['--end-ts']:
         end_ts = float(args['--end-ts'])
     else:
-        end_ts = (from_timestamp(start_ts) + datetime.timedelta(days=1)).timestamp()
+        end_ts = (tzdt_from_timestamp(start_ts) + datetime.timedelta(days=1)).timestamp()
 
     token = args['--token']
     if not token:
@@ -55,8 +52,8 @@ def main():
     # scrape
 
     print("Getting messages from %s to %s " % (
-        from_timestamp(start_ts),
-        from_timestamp(end_ts),
+        tzdt_from_timestamp(start_ts),
+        tzdt_from_timestamp(end_ts),
     ), file=sys.stderr)
 
     scraper = SlackScraper(token, verbose=verbose)

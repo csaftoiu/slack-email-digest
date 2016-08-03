@@ -9,6 +9,7 @@ import pytz
 import tzlocal
 
 from .memoize import memoize1_to_json_file
+from .datetime import tzdt_from_timestamp
 
 
 TEMPLATES = {
@@ -223,26 +224,42 @@ class HTMLRenderer:
         )
 
     def render_messages(self, messages):
-        start_dt = datetime.datetime.utcfromtimestamp(min(float(msg['ts']) for msg in messages))
-        end_dt = datetime.datetime.utcfromtimestamp(max(float(msg['ts']) - 1 for msg in messages))
+        if not messages:
+            return "<h2>There was no Slack activity</h2>"
 
-        local_tz = tzlocal.get_localzone()
-        start_dt = start_dt.replace(tzinfo=pytz.utc).astimezone(local_tz)
-        end_dt = end_dt.replace(tzinfo=pytz.utc).astimezone(local_tz)
+        # format header
 
+        # get boundary datetimes
+        start_dt = tzdt_from_timestamp(min(float(msg['ts']) for msg in messages))
+        end_dt = tzdt_from_timestamp(max(float(msg['ts']) - 1 for msg in messages))
+
+        # format the boundaries
         fmt = '%A, %B %d, %Y'
-
         start = start_dt.strftime(fmt)
         end = end_dt.strftime(fmt)
 
+        # make the header
         if start == end:
             date_str = start
         else:
             date_str = "%s to %s" % (start, end)
 
+        # add timezone
         date_str = "%s (%s)" % (date_str, start_dt.strftime("%Z"))
 
+        # render the messages
+        message_bits = []
+        last_ts = float(messages[0]['ts'])
+        for msg in messages:
+            # break up conversations
+            if float(msg['ts']) - last_ts >= 30 * 60:
+                message_bits.append("<hr>")
+            last_ts = float(msg['ts'])
+
+            message_bits.append(self.render_message(msg))
+
+        # finalize
         return self.templates['full_html'].render(
             date=date_str,
-            messages="\n".join(self.render_message(msg) for msg in messages),
+            messages="\n".join(message_bits),
         )
