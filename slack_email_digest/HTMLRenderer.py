@@ -213,7 +213,6 @@ class HTMLRenderer:
         of looking up the user id.
         :return Text of the rendered message.
         """
-        import pprint; pprint.pprint(msg)
         if '_override_username' in msg:
             username = msg['_override_username']
         elif 'user' in msg:
