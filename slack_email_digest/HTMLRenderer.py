@@ -256,6 +256,7 @@ class HTMLRenderer:
             text += "<br><br><span style='color: #777'>Attachments redacted.</span>"
         else:
             for attachment in msg.get('attachments', []):
+                attachment = dict(attachment)  # copy
                 text += "<br><br><span style='color: #777'>Attachment:</span>"
                 if attachment.get('is_msg_unfurl'):
                     text += "<blockquote>%s</blockquote>" % self.render_message({
@@ -265,6 +266,8 @@ class HTMLRenderer:
                         '_override_username': attachment['author_subname'],
                     })
                 else:
+                    if 'text' in attachment.get('mrkdwn_in', []):
+                        attachment['text'] = self.process_text(attachment['text'])
                     text += "<br>" + self.templates['attachment'].render(**attachment)
 
         return self.templates[which].render(
