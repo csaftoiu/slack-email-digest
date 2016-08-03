@@ -28,8 +28,22 @@ TEMPLATES = {
 </table>\
 """,
 
-    'image_attachment': """\
-<img src="{{ image_url }}" width="{{ image_width }}" height="{{ image_height }}">\
+    'attachment': """\
+{% if title -%}{% if service_icon -%}
+            <img src="{{ service_icon }}" width=16>
+        {%- endif %}{% if service_name -%}
+            &nbsp;{{ service_name }}
+        <br>{%- endif %}{% if title_link -%}
+            <a href="{{ title_link }}">{%-
+        endif %}<b>{{ title }}</b>{% if title_link -%}
+            </a>
+        {%- endif %}
+    <br>{%- endif %}{% if text -%}
+        {{ text }}<br>
+    {%- endif %}
+    {% if image_url -%}
+        <img src="{{ image_url }}" width="{{ image_width }}" height="{{ image_height }}">
+{%- endif -%}\
 """,
 
     'at': """\
@@ -193,7 +207,16 @@ class HTMLRenderer:
         return text
 
     def render_message(self, msg):
-        if 'user' in msg:
+        """Render a message. Also recursively called with 'fake' messages to render attachments.
+        :param msg: The message, from Slack, to render. Only difference from that returned
+        by the Slack API is a potential '_override_username' parameter, which we use instead
+        of looking up the user id.
+        :return Text of the rendered message.
+        """
+        import pprint; pprint.pprint(msg)
+        if '_override_username' in msg:
+            username = msg['_override_username']
+        elif 'user' in msg:
             username = self.scraper.get_username(msg['user'])
         elif 'bot_id' in msg:
             bot_username = msg['username'] if 'username' in msg else self.scraper.get_bot_name(msg['bot_id'])
@@ -204,11 +227,15 @@ class HTMLRenderer:
         text = msg['text']
 
         which = 'message'
+        redact = False
         if msg.get('subtype') in ANNOUNCEMENT_TYPES:
             pass
         else:
             if username in self.redact_users:
-                text = "<i>[redacted]</i>"
+                redact = True
+
+        if redact:
+            text = "<i>[redacted]</i>"
 
         # append reactions
         if msg.get('reactions'):
@@ -220,16 +247,25 @@ class HTMLRenderer:
             )
 
         local_tz = tzlocal.get_localzone()
-        message_local_dt = datetime.datetime.utcfromtimestamp(float(msg['ts'])) \
-            .replace(tzinfo=pytz.utc) \
-            .astimezone(local_tz)
+        message_local_dt = tzdt_from_timestamp(float(msg['ts']))
 
         text = self.process_text(text)
 
         # attachments
-        for attachment in msg.get('attachments', []):
-            if attachment.get('image_url'):
-                text += "<br>" + self.templates['image_attachment'].render(**attachment)
+        if redact:
+            text += "<br><br><span style='color: #777'>Attachments redacted.</span>"
+        else:
+            for attachment in msg.get('attachments', []):
+                text += "<br><br><span style='color: #777'>Attachment:</span>"
+                if attachment.get('is_msg_unfurl'):
+                    text += "<blockquote>%s</blockquote>" % self.render_message({
+                        'text': attachment['text'],
+                        'ts': attachment['ts'],
+                        'type': 'message',
+                        '_override_username': attachment['author_subname'],
+                    })
+                else:
+                    text += "<br>" + self.templates['attachment'].render(**attachment)
 
         return self.templates[which].render(
             user=username,
