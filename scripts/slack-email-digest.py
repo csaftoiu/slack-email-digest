@@ -9,17 +9,18 @@ Options:
                              Defaults to the start of yesterday in the local timezone.
     -e --end-ts=<ts>         UTC timestamp of the last message to include.
                              Defaults to 1 day after --start-ts.
-    -o --out-file=<file>     Filename to output. [default: digest.html]
+    -o --out-prefix=<file>   Prefix of filename to output. e.g. "digest" will output
+                             to "digest-part0.html", "digest-part1.html", etc.
+                             [default: digest]
     -v --verbose             Whether to provide verbose output
 """
 
 import datetime
+import math
 import sys
 import time
 
 from docopt import docopt
-import pytz
-import tzlocal
 
 from slack_email_digest import SlackScraper, HTMLRenderer
 from slack_email_digest.datetime import tzdt_from_timestamp
@@ -47,7 +48,7 @@ def main():
         sys.exit("Must provide --token")
 
     verbose = args['--verbose']
-    out_file = args['--out-file']
+    out_prefix = args['--out-prefix']
 
     # scrape
 
@@ -67,8 +68,14 @@ def main():
 
     renderer = HTMLRenderer(scraper)
     # render as ascii with xmlcharrefreplace, so don't have to deal with encoding
-    with open(out_file, 'wb') as f:
-        f.write(renderer.render_messages(hist).encode('ascii', errors='xmlcharrefreplace'))
+    for start in range(0, len(hist), 150):
+        part_i = start // 150
+        with open(out_prefix + '-part%d.html' % (part_i,), 'wb') as f:
+            f.write(renderer.render_messages(
+                hist[start:start+150],
+                part=part_i,
+                parts=int(math.ceil(len(hist) / 150)),
+            ).encode('ascii', errors='xmlcharrefreplace'))
 
 
 if __name__ == '__main__':

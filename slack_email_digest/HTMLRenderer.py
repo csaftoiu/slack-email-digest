@@ -15,7 +15,7 @@ from .datetime import tzdt_from_timestamp
 TEMPLATES = {
     'full_html': """\
 <div style="font-family: Slack-Lato,appleLogo,sans-serif; font-size: .9375rem; line-height: 1.375rem;">
-<h2>Slack Digest for {{ date }}</h2>
+<h2>Slack Digest for {{ date }}{% if parts > 1 %} [Part {{ part + 1 }} of {{ parts }}]{% endif %}</h2>
 {{ messages }}
 </div>\
 """,
@@ -276,7 +276,13 @@ class HTMLRenderer:
             text=text,
         )
 
-    def render_messages(self, messages):
+    def render_messages(self, messages, part=0, parts=1):
+        """Render messages.
+        :param messages: List of slack messages to render.
+        :param part: Which part of the total number of messages this is.
+        :param parts: The total number of parts.
+        :return HTML text of the rendered messages.
+        """
         if not messages:
             return "<h2>There was no Slack activity</h2>"
 
@@ -315,4 +321,5 @@ class HTMLRenderer:
         return self.templates['full_html'].render(
             date=date_str,
             messages="\n".join(message_bits),
+            part=part, parts=parts,
         )
