@@ -34,14 +34,14 @@ def main():
     # process args
 
     if args['--start-ts']:
-        start_ts = args['--start-ts']
+        start_ts = float(args['--start-ts'])
     else:
         yest = (from_timestamp(time.time()) - datetime.timedelta(days=1))
         yest = yest.replace(hour=0, minute=0, second=0, microsecond=0)
         start_ts = yest.timestamp()
 
     if args['--end-ts']:
-        end_ts = args['--end-ts']
+        end_ts = float(args['--end-ts'])
     else:
         end_ts = (from_timestamp(start_ts) + datetime.timedelta(days=1)).timestamp()
 

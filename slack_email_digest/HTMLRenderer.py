@@ -76,7 +76,7 @@ class HTMLRenderer:
     """Given a SlackScraper, render messages to HTML suitable for display in
     an email client.
     """
-    def __init__(self, scraper, redact_users=None, redact_avatars=None):
+    def __init__(self, scraper, redact_users=None):
         """
         :param scraper: A SlackScraper to get channel names, user names, etc.
         :param redact_users: List of users to redact. Defaults to ['mailclark'] to avoid
@@ -84,7 +84,6 @@ class HTMLRenderer:
         :param redact_avatars: List of users whose avatar not to include. Defaults to nobody.
         """
         self.redact_users = redact_users or ['mailclark']
-        self.redact_avatars = redact_avatars or []
 
         self.scraper = scraper
 
@@ -114,7 +113,11 @@ class HTMLRenderer:
         def sub_custom_emoji(m, big=False):
             text = m.group(1)
             if text[1:-1] in self.scraper.emojis:
-                return '<img width="%s" src="%s">' % (32 if big else 20, self.scraper.emojis[text[1:-1]])
+                return '<img width="%s" src="%s" title="%s">' % (
+                    32 if big else 20,
+                    self.scraper.emojis[text[1:-1]],
+                    text,
+                )
             return text
 
         # # first all the < ... > specials
@@ -161,7 +164,17 @@ class HTMLRenderer:
         text = re.sub(r'  ', '&nbsp;&nbsp;', text)
 
         # emojis
-        text = emoji.emojize(text, use_aliases=True)
+        def sub_standard_emoji(m):
+            text = m.group(1)
+            subbed = emoji.emojize(text, use_aliases=True)
+            if subbed != text:
+                return "<span title='%s'>%s</span>" % (text, subbed)
+            else:
+                return text
+
+        text = re.sub(r'(:[a-zA-Z0-9\+\-_&.ô’Åéãíç]+:)', sub_standard_emoji, text)
+
+        # text = emoji.emojize(text, use_aliases=True)
         # custom emojis
         # nothing but whitespace - big emoji
         text = re.sub(r'^\W*(:[a-zA-Z0-9\+\-_&.ô’Åéãíç]+:)\W*$', lambda m: sub_custom_emoji(m, True), text)
@@ -174,7 +187,8 @@ class HTMLRenderer:
         if 'user' in msg:
             username = self.scraper.get_username(msg['user'])
         elif 'bot_id' in msg:
-            username = "%s (BOT)" % self.scraper.get_bot_name(msg['bot_id'])
+            bot_username = msg['username'] if 'username' in msg else self.scraper.get_bot_name(msg['bot_id'])
+            username = "%s (BOT)" % bot_username
         else:
             raise ValueError("Don't know how to handle this message:\n%s" % (pprint.pformat(msg),))
 
@@ -204,7 +218,7 @@ class HTMLRenderer:
         return self.templates[which].render(
             user=username,
             timestamp=message_local_dt.strftime("%I:%M %p"),
-            avatar=self.avatars.get(username, None) if username not in self.redact_avatars else [],
+            avatar=self.avatars.get(username, None),  # bot users won't have an avatar
             text=self.process_text(text),
         )
 
