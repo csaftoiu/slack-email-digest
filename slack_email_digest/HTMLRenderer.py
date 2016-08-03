@@ -19,12 +19,6 @@ TEMPLATES = {
 </div>\
 """,
 
-    'announcement': """\
-<div>
-  <i>{{ text }}</i></b>
-</div>\
-""",
-
     'message': """\
 <table><tr><td valign="top"><img {% if avatar %}src="{{ avatar }}"{% endif %} width="32"></td>
   <td><b>{{ user }}</b> <font color="#7f7f7f">{{ timestamp }}</font><br>
@@ -188,7 +182,7 @@ class HTMLRenderer:
 
         which = 'message'
         if msg.get('subtype') in ANNOUNCEMENT_TYPES:
-            which = 'announcement'
+            pass
         else:
             if username in self.redact_users:
                 text = "<i>[redacted]</i>"
