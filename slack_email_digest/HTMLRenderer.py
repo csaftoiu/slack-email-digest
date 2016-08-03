@@ -45,27 +45,6 @@ pre {
     color: #333;
     box-sizing: border-box;
 }
-.r-at {
-    color: #2a80b9;
-}
-.r-ch {
-    color: #2a80b9;
-}
-.m-cn {
-    overflow: hidden;
-    padding: 5px 0px;
-}
-.m-av {
-    float: left;
-    padding: 2px 4px;
-}
-.m-tx {
-    overflow: hidden;
-}
-.m-ts {
-    color: #7f7f7f;
-    font-size: 85%;
-}
 </style>
 </head>
 <body>
@@ -82,20 +61,19 @@ pre {
 """,
 
     'message': """\
-<div class="m-cn">
-  <div class="m-av"><img {% if avatar %}src="{{ avatar }}"{% endif %} width="32"></div>
-  <div class="m-tx"><b>{{ user }}</b> <span class="m-ts">{{ timestamp }}</span><br>
+<table><tr><td valign="top"><img {% if avatar %}src="{{ avatar }}"{% endif %} width="32"></td>
+  <td><b>{{ user }}</b> <font color="#7f7f7f">{{ timestamp }}</font><br>
   {{ text }}
-  </div>
-</div>\
+  </td>
+</table>\
 """,
 
     'at': """\
-<span class="r-at">@{{ user }}</span>\
+<font color="#2a80b9">@{{ user }}</font>\
 """,
 
     'channel_ref': """\
-<span class="r-ch">#{{ channel }}</span>\
+<font color="#2a80b9">#{{ channel }}</font>\
 """
 }
 
