@@ -91,6 +91,19 @@ class EmailRenderer:
                    for part in parts):
                 break
 
+        # inner IDs don't matter, keep them unique
+        # but base if off last_message_id if it's given, just for
+        # consistency
+        now = int(time.time())
+        def part_message_id(part_i):
+            if last_message_id:
+                assert last_message_id[0] == '<'
+                assert last_message_id[-1] == '>'
+                left, right = last_message_id.split("@", 1)
+                return "%s-part%d@%s" % (left, part_i, right)
+            else:
+                return '<digest-%d-part%d@slackemaildigest.com>' % (now, part_i)
+
         # chain the messages so they reply to each other
         if in_reply_to:
             parts[0]['custom_headers']['In-Reply-To'] = in_reply_to
@@ -98,13 +111,9 @@ class EmailRenderer:
         # inner IDs don't matter, keep them unique
         now = int(time.time())
         for i, part in enumerate(parts):
-            part['custom_headers']['Message-ID'] = '<digest-%d-part%d@slackemaildigest.com>' % (
-                now, i,
-            )
+            part['custom_headers']['Message-ID'] = part_message_id(i)
             if i > 0:
-                part['custom_headers']['In-Reply-To'] = '<digest-%d-part%d@slackemaildigest.com>' % (
-                    now, i - 1,
-                )
+                part['custom_headers']['In-Reply-To'] = part_message_id(i - 1)
 
         if last_message_id:
             parts[-1]['custom_headers']['Message-ID'] = last_message_id
