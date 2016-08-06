@@ -13,9 +13,12 @@ from .datetime import tzdt_from_timestamp
 
 
 TEMPLATES = {
+    'header_text': """\
+Slack Digest for {{ date }}{% if parts > 1 %} [Part {{ part + 1 }} of {{ parts }}]{% endif %}\
+""",
     'full_html': """\
 <div style="font-family: Slack-Lato,appleLogo,sans-serif; font-size: .9375rem; line-height: 1.375rem;">
-<h2>Slack Digest for {{ date }}{% if parts > 1 %} [Part {{ part + 1 }} of {{ parts }}]{% endif %}</h2>
+<h2>{{ header_text }}</h2>
 {{ messages }}
 </div>\
 """,
@@ -276,6 +279,41 @@ class HTMLRenderer:
             text=text,
         )
 
+    def render_header_text(self, messages, part=0, parts=1, date_hint=None):
+        """Given a list of messages, render the appropriate header text.
+        :param messages: List of slack messages to render.
+        :param part: Which part of the total number of messages this is.
+        :param parts: The total number of parts.
+        :param date_hint: Date hint in case there are no messages
+        :return: Text appropriate for the header/subject line
+        """
+        date_fmt = '%A, %B %d, %Y'
+
+        if not messages:
+            if not date_hint:
+                raise ValueError("Can't get header text from no messages and no date hint")
+
+            return self.templates['header_text'].render(date=date_hint.strftime(date_fmt), part=0, parts=1)
+
+        # get boundary datetimes
+        start_dt = tzdt_from_timestamp(min(float(msg['ts']) for msg in messages))
+        end_dt = tzdt_from_timestamp(max(float(msg['ts']) - 1 for msg in messages))
+
+        # format the boundaries
+        start = start_dt.strftime(date_fmt)
+        end = end_dt.strftime(date_fmt)
+
+        # make the header
+        if start == end:
+            date_str = start
+        else:
+            date_str = "%s to %s" % (start, end)
+
+        # add timezone
+        date_str = "%s (%s)" % (date_str, start_dt.strftime("%Z"))
+
+        return self.templates['header_text'].render(date=date_str, part=part, parts=parts)
+
     def render_messages(self, messages, part=0, parts=1):
         """Render messages.
         :param messages: List of slack messages to render.
@@ -287,24 +325,7 @@ class HTMLRenderer:
             return "<h2>There was no Slack activity</h2>"
 
         # format header
-
-        # get boundary datetimes
-        start_dt = tzdt_from_timestamp(min(float(msg['ts']) for msg in messages))
-        end_dt = tzdt_from_timestamp(max(float(msg['ts']) - 1 for msg in messages))
-
-        # format the boundaries
-        fmt = '%A, %B %d, %Y'
-        start = start_dt.strftime(fmt)
-        end = end_dt.strftime(fmt)
-
-        # make the header
-        if start == end:
-            date_str = start
-        else:
-            date_str = "%s to %s" % (start, end)
-
-        # add timezone
-        date_str = "%s (%s)" % (date_str, start_dt.strftime("%Z"))
+        header_text = self.render_header_text(messages, part=part, parts=parts)
 
         # render the messages
         message_bits = []
@@ -319,7 +340,6 @@ class HTMLRenderer:
 
         # finalize
         return self.templates['full_html'].render(
-            date=date_str,
+            header_text=header_text,
             messages="\n".join(message_bits),
-            part=part, parts=parts,
         )

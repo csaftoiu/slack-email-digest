@@ -1,4 +1,4 @@
-digest*.html
+config.ini
 .idea/
 .virtualenv/
 
