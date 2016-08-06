@@ -1,0 +1,8 @@
+[slack-email-digest.py]
+token=<your-slack-token>
+from=<your-sender-address>
+
+smtp-host=smtp.gmail.com
+smtp-port=587
+smtp-user=<gmail-login>
+smtp-password=<gmail-password>
