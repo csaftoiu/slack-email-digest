@@ -13,6 +13,8 @@ Options:
 
     --from=<name>            Email to send from.
     --to=<email>             Destination email.
+    --delay=<seconds>        Number of seconds to wait in between
+                             sending messages. [default: 5]
     --from-name=<name>       Name to send from. e.g. appears in "Name" part
                              as "Name <foo@foo.com>"
                              [default: Slack DigestBot]
@@ -26,9 +28,6 @@ SMTP Delivery Options:
     --smtp-password=<pwd>    SMTP password
     --smtp-host=<host>       SMTP host
     --smtp-port=<port>       SMTP port [default: 587]
-    --smtp-delay=<delay>     Seconds to pause between consecutive messages.
-                             [default: 5]
-
 """
 
 import datetime
@@ -38,7 +37,6 @@ import time
 
 from clint.textui import progress
 from docoptcfg import docoptcfg
-import tzlocal
 
 from slack_email_digest import SlackScraper, HTMLRenderer, EmailRenderer
 from slack_email_digest.datetime import tzdt_from_timestamp
@@ -62,7 +60,7 @@ def deliver_stdout(args, messages):
 
 
 @register_delivery_method('smtp')
-def deliver_smtp(args, messages):
+def deliver_smtp(args, email_msg):
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
     import smtplib
@@ -80,30 +78,23 @@ def deliver_smtp(args, messages):
     password = get_option('password')
     host = get_option('host')
     port = int(get_option('port'))
-    delay = int(get_option('delay'))
 
-    for email_msg in messages:
-        mime_msg = MIMEMultipart('alternative')
-        mime_msg['Subject'] = email_msg['subject']
-        mime_msg['From'] = email_msg['sender']
-        mime_msg['To'] = email_msg['to']
-        for key, val in email_msg.get('custom_headers', {}).items():
-            mime_msg[key] = val
+    mime_msg = MIMEMultipart('alternative')
+    mime_msg['Subject'] = email_msg['subject']
+    mime_msg['From'] = email_msg['sender']
+    mime_msg['To'] = email_msg['to']
+    for key, val in email_msg.get('custom_headers', {}).items():
+        mime_msg[key] = val
 
-        mime_msg.attach(MIMEText(email_msg['text_body'], 'plain'))
-        mime_msg.attach(MIMEText(email_msg['html_body'], 'html'))
+    mime_msg.attach(MIMEText(email_msg['text_body'], 'plain'))
+    mime_msg.attach(MIMEText(email_msg['html_body'], 'html'))
 
-        message_body = mime_msg.as_string()
-
-        server = smtplib.SMTP(host, port)
-        server.ehlo()
-        server.starttls()
-        server.login(user, password)
-        server.sendmail(from_email, to, mime_msg.as_string())
-        server.close()
-        if delay:
-            for _ in progress.bar(range(delay), label="Waiting to send next message... "):
-                time.sleep(1)
+    server = smtplib.SMTP(host, port)
+    server.ehlo()
+    server.starttls()
+    server.login(user, password)
+    server.sendmail(from_email, to, mime_msg.as_string())
+    server.close()
 
 
 def main():
@@ -112,13 +103,11 @@ def main():
     # process args
     if args['--date']:
         date = datetime.datetime.strptime(args['--date'], '%Y-%m-%d')
-        date = date.replace(tzinfo=tzlocal.get_localzone())
     else:
         date = (tzdt_from_timestamp(time.time()) - datetime.timedelta(days=1))
-        date = date.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    start_ts = date.timestamp()
-    end_ts = (date + datetime.timedelta(days=1)).timestamp()
+    start_ts = time.mktime(date.timetuple())
+    end_ts = time.mktime((date + datetime.timedelta(days=1)).timetuple())
 
     token = args['--token']
     if not token:
@@ -129,6 +118,7 @@ def main():
     from_email = args['--from']
     to = args['--to']
     from_name = args['--from-name']
+    delay = int(args['--delay'])
 
     if delivery not in delivery_methods:
         sys.exit("Unknown delivery method: %s" % (delivery,))
@@ -165,7 +155,10 @@ def main():
     if verbose:
         print("Delivering in %d parts..." % (len(emails,)), file=sys.stderr)
 
-    delivery_methods[delivery](args, emails)
+    for email in emails:
+        delivery_methods[delivery](args, email)
+        for _ in progress.bar(range(delay), label="Waiting to send next message... "):
+            time.sleep(1)
 
 
 if __name__ == '__main__':
