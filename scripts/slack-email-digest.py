@@ -109,10 +109,12 @@ def main():
     start_ts = time.mktime(date.timetuple())
     end_ts = time.mktime((date + datetime.timedelta(days=1)).timetuple())
 
-    token = args['--token']
-    if not token:
-        sys.exit("Must provide --token")
+    # work-around docoptcfg not taking required arguments from a config file
+    for required in ['--token', '--from', '--to']:
+        if not args[required]:
+            sys.exit("Must provide {}".format(required))
 
+    token = args['--token']
     verbose = args['--verbose']
     delivery = args['--delivery']
     from_email = args['--from']
