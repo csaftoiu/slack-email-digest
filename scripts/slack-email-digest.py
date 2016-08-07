@@ -30,6 +30,7 @@ SMTP Delivery Options:
     --smtp-port=<port>       SMTP port [default: 587]
 """
 
+import os
 import datetime
 import pprint
 import sys
@@ -37,6 +38,7 @@ import time
 
 from clint.textui import progress
 from docoptcfg import docoptcfg
+from postmark import PMMail
 
 from slack_email_digest import SlackScraper, HTMLRenderer, EmailRenderer
 from slack_email_digest.datetime import tzdt_from_timestamp
@@ -56,8 +58,25 @@ def register_delivery_method(name):
 
 @register_delivery_method('stdout')
 def deliver_stdout(args, messages):
+    # Strip long messages
+    if len(messages['html_body']) > 40:
+        messages['html_body'] = messages['html_body'][:40] + '...'
+    if len(messages['text_body']) > 40:
+        messages['text_body'] = messages['text_body'][:40] + '...'
     pprint.pprint(messages)
 
+@register_delivery_method('postmark')
+def deliver_postmark(args, email):
+    message = PMMail(
+        api_key = os.environ.get('POSTMARK_API_TOKEN'),
+        subject = email['subject'],
+        sender = email['sender'],
+        to = email['to'],
+        text_body = email['text_body'],
+        html_body = email['html_body'],        
+        tag = "slack_digest")
+
+    message.send()
 
 @register_delivery_method('smtp')
 def deliver_smtp(args, email_msg):
@@ -121,20 +140,21 @@ def main():
     to = args['--to']
     from_name = args['--from-name']
     delay = int(args['--delay'])
+    slack_channel = args['--channel']
 
     if delivery not in delivery_methods:
         sys.exit("Unknown delivery method: %s" % (delivery,))
 
     # scrape
-    if verbose:
-        print("Getting messages from %s to %s " % (
-            tzdt_from_timestamp(start_ts),
-            tzdt_from_timestamp(end_ts),
+    print("Fetching Slack messages for #%s from %s (UTC) to %s (UTC) " % (
+        slack_channel,
+        tzdt_from_timestamp(start_ts),
+        tzdt_from_timestamp(end_ts),
         ), file=sys.stderr)
 
     scraper = SlackScraper(token, verbose=verbose)
     hist = scraper.get_channel_history(
-        args['--channel'],
+        slack_channel,
         oldest=start_ts, latest=end_ts)
 
     hist.sort(key=lambda msg: float(msg['ts']))
@@ -154,11 +174,11 @@ def main():
         email['sender'] = ("%s <%s>" % (from_name, from_email)) if from_name else from_email
         email['to'] = to
 
-    if verbose:
-        print("Delivering in %d parts..." % (len(emails,)), file=sys.stderr)
-
-    for email in emails:
-        delivery_methods[delivery](args, email)
+    delivery_method = delivery_methods[delivery]
+    print("Delivering in %d parts... via %s" % (len(emails), delivery_method.__name__), file=sys.stderr)
+    
+    for email in emails:    
+        delivery_method(args, email)
         for _ in progress.bar(range(delay), label="Waiting to send next message... "):
             time.sleep(1)
 
