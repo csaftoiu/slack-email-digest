@@ -19,6 +19,7 @@ setup(
         'pyshorteners(>=0.6.0)',
         'docoptcfg(>=1.0.2)',
         'clint(>=0.5.1)',
+        'python-postmark(>=0.4.3)',
     ],
 
     packages=[],

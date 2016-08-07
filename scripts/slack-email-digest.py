@@ -30,6 +30,7 @@ SMTP Delivery Options:
     --smtp-port=<port>       SMTP port [default: 587]
 """
 
+import os
 import datetime
 import pprint
 import sys
@@ -37,6 +38,7 @@ import time
 
 from clint.textui import progress
 from docoptcfg import docoptcfg
+from postmark import PMMail
 
 from slack_email_digest import SlackScraper, HTMLRenderer, EmailRenderer
 from slack_email_digest.datetime import tzdt_from_timestamp
@@ -63,6 +65,18 @@ def deliver_stdout(args, messages):
         messages['text_body'] = messages['text_body'][:40] + '...'
     pprint.pprint(messages)
 
+@register_delivery_method('postmark')
+def deliver_postmark(args, email):
+    message = PMMail(
+        api_key = os.environ.get('POSTMARK_API_TOKEN'),
+        subject = email['subject'],
+        sender = email['sender'],
+        to = email['to'],
+        text_body = email['text_body'],
+        html_body = email['html_body'],        
+        tag = "slack_digest")
+
+    message.send()
 
 @register_delivery_method('smtp')
 def deliver_smtp(args, email_msg):
@@ -163,7 +177,9 @@ def main():
         print("Delivering in %d parts..." % (len(emails,)), file=sys.stderr)
 
     for email in emails:
-        delivery_methods[delivery](args, email)
+        delivery_method = delivery_methods[delivery]
+        print("Delivering email using method %s" % delivery_method)
+        delivery_method(args, email)
         for _ in progress.bar(range(delay), label="Waiting to send next message... "):
             time.sleep(1)
 
