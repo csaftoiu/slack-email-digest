@@ -77,14 +77,19 @@ def deliver_stdout(args, messages):
 
 @delivery_methods.register('postmark')
 def deliver_postmark(args, email):
+    if not os.environ.get('POSTMARK_API_TOKEN'):
+        sys.exit("Missing POSTMARK_API_TOKEN variable")
+
     message = PMMail(
-        api_key = os.environ.get('POSTMARK_API_TOKEN'),
-        subject = email['subject'],
-        sender = email['sender'],
-        to = email['to'],
-        text_body = email['text_body'],
-        html_body = email['html_body'],        
-        tag = "slack_digest")
+        api_key=os.environ.get('POSTMARK_API_TOKEN'),
+        subject=email['subject'],
+        sender=email['sender'],
+        to=email['to'],
+        text_body=email['text_body'],
+        html_body=email['html_body'],
+        tag="slack_digest",
+        custom_headers=email["custom_headers"],
+    )
 
     message.send()
 
