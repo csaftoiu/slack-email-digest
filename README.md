@@ -32,7 +32,7 @@ Add the following add-ons:
 
 Set the following config vars:
 
-1. `SLACKEMAILDIGEST_DELIVERY=delivery`
+1. `SLACKEMAILDIGEST_DELIVERY=postmark`
 1. `SLACKEMAILDIGEST_FROM=<sender@yourdomain.com>`
 1. `SLACKEMAILDIGEST_TO=<receiver@theirdomain.com>`
 1. `SLACKEMAILDIGEST_TOKEN=<slack-test-api-token>` ([Test token](https://api.slack.com/docs/oauth-test-tokens))
