@@ -140,20 +140,21 @@ def main():
     to = args['--to']
     from_name = args['--from-name']
     delay = int(args['--delay'])
+    slack_channel = args['--channel']
 
     if delivery not in delivery_methods:
         sys.exit("Unknown delivery method: %s" % (delivery,))
 
     # scrape
-    if verbose:
-        print("Getting messages from %s to %s " % (
-            tzdt_from_timestamp(start_ts),
-            tzdt_from_timestamp(end_ts),
+    print("Fetching Slack messages for #%s from %s (UTC) to %s (UTC) " % (
+        slack_channel,
+        tzdt_from_timestamp(start_ts),
+        tzdt_from_timestamp(end_ts),
         ), file=sys.stderr)
 
     scraper = SlackScraper(token, verbose=verbose)
     hist = scraper.get_channel_history(
-        args['--channel'],
+        slack_channel,
         oldest=start_ts, latest=end_ts)
 
     hist.sort(key=lambda msg: float(msg['ts']))
@@ -173,12 +174,10 @@ def main():
         email['sender'] = ("%s <%s>" % (from_name, from_email)) if from_name else from_email
         email['to'] = to
 
-    if verbose:
-        print("Delivering in %d parts..." % (len(emails,)), file=sys.stderr)
-
-    for email in emails:
-        delivery_method = delivery_methods[delivery]
-        print("Delivering email using method %s" % delivery_method)
+    delivery_method = delivery_methods[delivery]
+    print("Delivering in %d parts... via %s" % (len(emails), delivery_method.__name__), file=sys.stderr)
+    
+    for email in emails:    
         delivery_method(args, email)
         for _ in progress.bar(range(delay), label="Waiting to send next message... "):
             time.sleep(1)
