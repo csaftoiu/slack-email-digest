@@ -30,12 +30,15 @@ Add the following add-ons:
 1. Heroku Scheduler
 1. Papertrail (optional)
 
-Set the following config vars
+Set the following config vars:
 
-1. SLACKEMAILDIGEST_DELIVERY=delivery
-1. SLACKEMAILDIGEST_FROM=<sender@yourdomain.com>
-1. SLACKEMAILDIGEST_TO=<receiver@theirdomain.com>
-1. SLACKEMAILDIGEST_TOKEN=<slack-test-api-token> ([Test token](https://api.slack.com/docs/oauth-test-tokens))
+1. `SLACKEMAILDIGEST_DELIVERY=delivery`
+1. `SLACKEMAILDIGEST_FROM=<sender@yourdomain.com>`
+1. `SLACKEMAILDIGEST_TO=<receiver@theirdomain.com>`
+1. `SLACKEMAILDIGEST_TOKEN=<slack-test-api-token>` ([Test token](https://api.slack.com/docs/oauth-test-tokens))
 
-Open the Heroku Scheduler add-on from your app dashboard and add a new job running `scripts/slack-email-digest.sh` daily.
+Configure the necessary add-ons:
+
+1. Open the *Heroku Scheduler* add-on from your app dashboard and add a new job running `scripts/slack-email-digest.sh` daily.
+1. Open the *Postmark* add-on and create a "sender signature" matching the value of `SLACKEMAILDIGEST_FROM`
 
