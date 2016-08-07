@@ -48,15 +48,19 @@ def format_last_message_id(date):
     return '<digest-%s-lastpart@slackemaildigest.com>' % date.strftime('%Y-%m-%d')
 
 
-delivery_methods = {}
-def register_delivery_method(name):
-    def decorator(f):
-        delivery_methods[name] = f
-        return f
-    return decorator
+class DecoratorDictRegister(dict):
+    def __init__(self):
+        super(DecoratorDictRegister, self).__init__()
+
+    def register(self, name):
+        def decorator(f):
+            self[name] = f
+            return f
+        return decorator
+delivery_methods = DecoratorDictRegister()
 
 
-@register_delivery_method('stdout')
+@delivery_methods.register('stdout')
 def deliver_stdout(args, messages):
     # Strip long messages
     if len(messages['html_body']) > 40:
@@ -65,7 +69,8 @@ def deliver_stdout(args, messages):
         messages['text_body'] = messages['text_body'][:40] + '...'
     pprint.pprint(messages)
 
-@register_delivery_method('postmark')
+
+@delivery_methods.register('postmark')
 def deliver_postmark(args, email):
     message = PMMail(
         api_key = os.environ.get('POSTMARK_API_TOKEN'),
@@ -78,7 +83,8 @@ def deliver_postmark(args, email):
 
     message.send()
 
-@register_delivery_method('smtp')
+
+@delivery_methods.register('smtp')
 def deliver_smtp(args, email_msg):
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
