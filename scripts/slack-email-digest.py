@@ -56,6 +56,11 @@ def register_delivery_method(name):
 
 @register_delivery_method('stdout')
 def deliver_stdout(args, messages):
+    # Strip long messages
+    if len(messages['html_body']) > 40:
+        messages['html_body'] = messages['html_body'][:40] + '...'
+    if len(messages['text_body']) > 40:
+        messages['text_body'] = messages['text_body'][:40] + '...'
     pprint.pprint(messages)
 
 
