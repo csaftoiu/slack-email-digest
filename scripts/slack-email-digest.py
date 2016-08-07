@@ -14,7 +14,9 @@ Options:
     -t --token=<token>       Slack API token to use
     --channel=<name>         Channel to export. [default: general]
     --date=<YYYY-mm-dd>      Date to export in YYYY-mm-dd format.
-                             Defaults to yesterday.
+                             Defaults to yesterday. Messages are exported
+                             from the start of the day to the end of the
+                             day, in UTC.
 
     --from=<name>            Email to send from.
     --to=<email>             Destination email.
@@ -24,7 +26,7 @@ Options:
                              as "Name <foo@foo.com>"
                              [default: Slack DigestBot]
     --delivery=<method>      Delivery method. Valid options
-                             are "stdout", "smtp", "postmark".
+                             are "stdout", "local_files", "smtp", "postmark".
                              See delivery options for more.
                              [default: stdout]
 
@@ -35,8 +37,9 @@ SMTP Delivery Options:
     --smtp-port=<port>       SMTP port [default: 587]
 """
 
-import os
+import calendar
 import datetime
+import os
 import pprint
 import sys
 import time
@@ -46,7 +49,6 @@ from docoptcfg import docoptcfg
 from postmark import PMMail
 
 from slack_email_digest import SlackScraper, HTMLRenderer, EmailRenderer
-from slack_email_digest.datetime import tzdt_from_timestamp
 
 
 def format_last_message_id(date):
@@ -66,13 +68,34 @@ delivery_methods = DecoratorDictRegister()
 
 
 @delivery_methods.register('stdout')
-def deliver_stdout(args, messages):
+def deliver_stdout(args, message):
     # Strip long messages
-    if len(messages['html_body']) > 40:
-        messages['html_body'] = messages['html_body'][:40] + '...'
-    if len(messages['text_body']) > 40:
-        messages['text_body'] = messages['text_body'][:40] + '...'
-    pprint.pprint(messages)
+    if len(message['html_body']) > 40:
+        message['html_body'] = message['html_body'][:40] + '...'
+    if len(message['text_body']) > 40:
+        message['text_body'] = message['text_body'][:40] + '...'
+    pprint.pprint(message)
+
+
+@delivery_methods.register('local_files')
+def deliver_files(args, message):
+    import re
+
+    def slugify(value):
+        # from http://stackoverflow.com/a/295466/15055
+        """
+        Normalizes string, converts to lowercase, removes non-alpha characters,
+        and converts spaces to hyphens.
+        """
+        import unicodedata
+        value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore')
+        value = re.sub(b'[^\w\s-]', b'', value).strip().lower().decode('ascii')
+        value = value.replace(" ", "-")
+        return value
+
+    fn = "%s.html" % (slugify(message['subject']),)
+    print("Writing email to %s..." % (fn,))
+    open(fn, 'w').write(message['html_body'])
 
 
 @delivery_methods.register('postmark')
@@ -136,13 +159,16 @@ def main():
     args = docoptcfg(__doc__, env_prefix="SLACKEMAILDIGEST_", config_option='--config')
 
     # process args
+    # for date, make naive timetuples, use calendar.timegm to convert them to
+    # the proper timestamps (which are always UTC)
     if args['--date']:
         date = datetime.datetime.strptime(args['--date'], '%Y-%m-%d')
     else:
-        date = (tzdt_from_timestamp(time.time()) - datetime.timedelta(days=1))
+        date = datetime.datetime.utcfromtimestamp(time.time()) - datetime.timedelta(days=1)
+        date = date.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    start_ts = time.mktime(date.timetuple())
-    end_ts = time.mktime((date + datetime.timedelta(days=1)).timetuple())
+    start_ts = calendar.timegm(date.utctimetuple())
+    end_ts = calendar.timegm((date + datetime.timedelta(days=1)).utctimetuple())
 
     # work-around docoptcfg not taking required arguments from a config file
     for required in ['--token', '--from', '--to']:
@@ -164,8 +190,8 @@ def main():
     # scrape
     print("Fetching Slack messages for #%s from %s (UTC) to %s (UTC) " % (
         slack_channel,
-        tzdt_from_timestamp(start_ts),
-        tzdt_from_timestamp(end_ts),
+        datetime.datetime.utcfromtimestamp(start_ts),
+        datetime.datetime.utcfromtimestamp(end_ts),
         ), file=sys.stderr)
 
     scraper = SlackScraper(token, verbose=verbose)

@@ -5,11 +5,8 @@ import re
 import emoji
 import jinja2
 import pyshorteners
-import pytz
-import tzlocal
 
 from .memoize import memoize1_to_json_file
-from .datetime import tzdt_from_timestamp
 
 
 TEMPLATES = {
@@ -248,8 +245,7 @@ class HTMLRenderer:
                 ) for reaction in msg['reactions'])
             )
 
-        local_tz = tzlocal.get_localzone()
-        message_local_dt = tzdt_from_timestamp(float(msg['ts']))
+        message_utc_dt = datetime.datetime.utcfromtimestamp(float(msg['ts']))
 
         text = self.process_text(text)
 
@@ -274,7 +270,7 @@ class HTMLRenderer:
 
         return self.templates[which].render(
             user=username,
-            timestamp=message_local_dt.strftime("%I:%M %p"),
+            timestamp=message_utc_dt.strftime("%I:%M %p"),
             avatar=self.avatars.get(username, None),  # bot users won't have an avatar
             text=text,
         )
@@ -296,8 +292,8 @@ class HTMLRenderer:
             return self.templates['header_text'].render(date=date_hint.strftime(date_fmt), part=0, parts=1)
 
         # get boundary datetimes
-        start_dt = tzdt_from_timestamp(min(float(msg['ts']) for msg in messages))
-        end_dt = tzdt_from_timestamp(max(float(msg['ts']) - 1 for msg in messages))
+        start_dt = datetime.datetime.utcfromtimestamp(min(float(msg['ts']) for msg in messages))
+        end_dt = datetime.datetime.utcfromtimestamp(max(float(msg['ts']) - 1 for msg in messages))
 
         # format the boundaries
         start = start_dt.strftime(date_fmt)
@@ -310,7 +306,7 @@ class HTMLRenderer:
             date_str = "%s to %s" % (start, end)
 
         # add timezone
-        date_str = "%s (%s)" % (date_str, start_dt.strftime("%Z"))
+        date_str = "%s (UTC)" % (date_str,)
 
         return self.templates['header_text'].render(date=date_str, part=part, parts=parts)
 
