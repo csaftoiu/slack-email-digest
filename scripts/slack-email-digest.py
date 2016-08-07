@@ -2,6 +2,11 @@
 """
 Usage: slack-email-digest.py [options] [--from=<email> --to=<email> --token=<token>]
 
+Options can be specified in three ways, with this order of precedence:
+    INI config file,      e.g. "from=foo@foo.com"
+    environment variable, e.g. "SLACKEMAILDIGEST_FROM=foo@foo.com"
+    command-line option,  e.g. "--from=foo@foo.com"
+
 Options:
     -c --config=<file.ini>   INI file to use for configuration
     -v --verbose             Whether to provide verbose output
