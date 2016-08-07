@@ -17,6 +17,8 @@ venv ./myenv
 
 ## Deploying to Heroku
 
+### Create the App
+
 Create and deploy the app:
 
 ```
@@ -24,21 +26,43 @@ heroku create my-app-name
 git push heroku master
 ```
 
+### Add-ons
+
 Add the following add-ons:
 
-1. Postmark
+1. Postmark (note: doesn't support message threading)
 1. Heroku Scheduler
 1. Papertrail (optional)
 
+### Config Vars 
+
 Set the following config vars:
 
+1. `SLACKEMAILDIGEST_FROM=sender@yourdomain.com`
+1. `SLACKEMAILDIGEST_TO=receiver@theirdomain.com`
+1. `SLACKEMAILDIGEST_TOKEN=slack-test-api-token` ([Test token](https://api.slack.com/docs/oauth-test-tokens))
+
+#### Postmark Delivery
+
+Set the following variable:
+
 1. `SLACKEMAILDIGEST_DELIVERY=postmark`
-1. `SLACKEMAILDIGEST_FROM=<sender@yourdomain.com>`
-1. `SLACKEMAILDIGEST_TO=<receiver@theirdomain.com>`
-1. `SLACKEMAILDIGEST_TOKEN=<slack-test-api-token>` ([Test token](https://api.slack.com/docs/oauth-test-tokens))
+
+Note that messages sent via postmark won't be threaded properly.
+
+#### SMTP Delivery
+
+Set the following variables:
+
+1. `SLACKEMAILDIGEST_SMTP_HOST=smtp.example.com`
+1. `SLACKEMAILDIGEST_SMTP_PORT=587`
+1. `SLACKEMAILDIGEST_SMTP_USER=example`
+1. `SLACKEMAILDIGEST_SMTP_PASSWORD=secret`
+
+### Add-ons
 
 Configure the necessary add-ons:
 
 1. Open the *Heroku Scheduler* add-on from your app dashboard and add a new job running `scripts/slack-email-digest.sh` daily.
-1. Open the *Postmark* add-on and create a "sender signature" matching the value of `SLACKEMAILDIGEST_FROM`
+1. *(postmark only)* Open the *Postmark* add-on and create a "sender signature" matching the value of `SLACKEMAILDIGEST_FROM`
 
