@@ -117,7 +117,7 @@ def deliver_smtp(args, email_msg):
 
 
 def main():
-    args = docoptcfg(__doc__, env_prefix="SLACKEMAILDIGEST", config_option='--config')
+    args = docoptcfg(__doc__, env_prefix="SLACKEMAILDIGEST_", config_option='--config')
 
     # process args
     if args['--date']:

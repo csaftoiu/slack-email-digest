@@ -95,6 +95,7 @@ class EmailRenderer:
         # but base if off last_message_id if it's given, just for
         # consistency
         now = int(time.time())
+
         def part_message_id(part_i):
             if last_message_id:
                 assert last_message_id[0] == '<'
