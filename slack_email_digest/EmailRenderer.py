@@ -1,4 +1,4 @@
-import time
+import datetime
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -23,6 +23,15 @@ class EmailRenderer:
         """
         self.renderer = message_renderer
         self.max_email_size = max_email_size
+
+    def get_message_id(self, slug, date, team_id, channel_id):
+        """Return a consistent message id for a slug, given the
+        date, group_id, and channel_id of the message.
+        """
+        return "<digest-%s-%s@%s.%s.slack-email-digest.com>" % (
+            date.strftime("%Y%m%d"), slug,
+            team_id, channel_id,
+        )
 
     @classmethod
     def estimate_email_size(cls, html_body, text_body, header_size=4500):
@@ -62,16 +71,24 @@ class EmailRenderer:
         return [self._render_message_part(part_messages, part_i, num_parts)
                 for part_i, part_messages in enumerate(n_even_chunks(messages, num_parts))]
 
-    def render_digest_emails(self, messages, in_reply_to=None, last_message_id=None):
+    def render_digest_emails(self, messages, date, team_id, channel_id):
         """Render digest emails for the given messages. Return format is a dict which
         can be used to construct the email messages.
 
         This estimates and splits messages into multiple emails such that no email
         is likely to be larger than the max email size.
 
+        Messages are assumed to span one day. The first part of each
+        daily digest will be in reply to the last part of the previous
+        daily digest, such that the messages will be threaded for mail
+        clients that support it.
+
         :param messages: List of Slack messages
-        :param in_reply_to: If given, first message will be In-Reply-To this.
-        :param last_message_id: If given, the last message will have this Message-ID.
+        :param date: The date the messages came from
+        :param team_id: The Slack team id the messages came from, used for
+            consistent threading.
+        :param channel_id: The channel id the messages came from, used for
+            consistent threading.
         """
         if not messages:
             raise NotImplementedError("No messages NYI")
@@ -91,32 +108,18 @@ class EmailRenderer:
                    for part in parts):
                 break
 
-        # inner IDs don't matter, keep them unique
-        # but base if off last_message_id if it's given, just for
-        # consistency
-        now = int(time.time())
-
-        def part_message_id(part_i):
-            if last_message_id:
-                assert last_message_id[0] == '<'
-                assert last_message_id[-1] == '>'
-                left, right = last_message_id.split("@", 1)
-                return "%s-part%d@%s" % (left, part_i, right)
-            else:
-                return '<digest-%d-part%d@slackemaildigest.com>' % (now, part_i)
-
         # chain the messages so they reply to each other
-        if in_reply_to:
-            parts[0]['custom_headers']['In-Reply-To'] = in_reply_to
+        def part_message_id(part_i):
+            if part_i == len(parts) - 1:
+                return self.get_message_id('last', date, team_id, channel_id)
+            else:
+                return self.get_message_id('part%d' % part_i, date, team_id, channel_id)
 
-        # inner IDs don't matter, keep them unique
-        now = int(time.time())
         for i, part in enumerate(parts):
             part['custom_headers']['Message-ID'] = part_message_id(i)
-            if i > 0:
-                part['custom_headers']['In-Reply-To'] = part_message_id(i - 1)
-
-        if last_message_id:
-            parts[-1]['custom_headers']['Message-ID'] = last_message_id
+            if i == 0 and date.day > 1:
+                part['custom_headers']['In-Reply-To'] = self.get_message_id(
+                    'last', date - datetime.timedelta(days=1), team_id, channel_id,
+                )
 
         return parts
