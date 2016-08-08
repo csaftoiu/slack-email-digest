@@ -17,6 +17,10 @@ class SlackScraper(object):
 
         self.request_pause_period = 0.5
 
+    def get_team_id(self):
+        """:return The team ID for the Slack being accessed by this scraper."""
+        return self.slack.team.info().body['team']['id']
+
     def get_username(self, user_id):
         for name, info in self.users.items():
             if info['id'] == user_id:

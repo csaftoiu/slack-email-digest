@@ -195,6 +195,9 @@ def main():
         ), file=sys.stderr)
 
     scraper = SlackScraper(token, verbose=verbose)
+    team_id = scraper.get_team_id()
+    channel_id = scraper.get_channel_id(slack_channel)
+
     hist = scraper.get_channel_history(
         slack_channel,
         oldest=start_ts, latest=end_ts)
@@ -206,12 +209,9 @@ def main():
 
     # render emails, replying to the last day's digest, and setting the last
     # id to be reply-able from the next day's digest
-    in_reply_to = None
-    last_message_id = format_last_message_id(date)
-    if date.day > 1:
-        in_reply_to = format_last_message_id(date - datetime.timedelta(days=1))
-
-    emails = email_renderer.render_digest_emails(hist, in_reply_to=in_reply_to, last_message_id=last_message_id)
+    emails = email_renderer.render_digest_emails(
+        hist, date, team_id, channel_id,
+    )
     for email in emails:
         email['sender'] = ("%s <%s>" % (from_name, from_email)) if from_name else from_email
         email['to'] = to
