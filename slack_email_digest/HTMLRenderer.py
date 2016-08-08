@@ -16,6 +16,9 @@ Slack Digest for {{ date }}{% if parts > 1 %} [Part {{ part + 1 }} of {{ parts }
     'full_html': """\
 <div style="font-family: Slack-Lato,appleLogo,sans-serif; font-size: .9375rem; line-height: 1.375rem;">
 <h2>{{ header_text }}</h2>
+<h3><font color="#7f7f7f">\
+(Click <a href="{{ visit_url }}">here</a> to view the chat live.\
+{% if invite_url %} For an invite, click <a href="{{ invite_url }}">here</a>.{% endif %})</h3>
 {{ messages }}
 </div>\
 """,
@@ -275,15 +278,18 @@ class HTMLRenderer:
             text=text,
         )
 
-    def render_header_text(self, messages, part=0, parts=1, date_hint=None):
+    def render_header_text(self, messages, part=0, parts=1, date_hint=None,
+                           short=False):
         """Given a list of messages, render the appropriate header text.
         :param messages: List of slack messages to render.
         :param part: Which part of the total number of messages this is.
         :param parts: The total number of parts.
         :param date_hint: Date hint in case there are no messages
+        :param short: If short, provide a shortened header, as suitable for
+            a subject line in an email.
         :return: Text appropriate for the header/subject line
         """
-        date_fmt = '%A, %B %d, %Y'
+        date_fmt = '%B %d, %Y' if short else '%A, %B %d, %Y'
 
         if not messages:
             if not date_hint:
@@ -318,24 +324,28 @@ class HTMLRenderer:
         :return HTML text of the rendered messages.
         """
         if not messages:
-            return "<h2>There was no Slack activity</h2>"
+            header_text = "There was no Slack activity"
+            message_bits = []
+        else:
+            # format header
+            print(part, parts)
+            header_text = self.render_header_text(messages, part=part, parts=parts)
 
-        # format header
-        header_text = self.render_header_text(messages, part=part, parts=parts)
+            # render the messages
+            message_bits = []
+            last_ts = float(messages[0]['ts'])
+            for msg in messages:
+                # break up conversations
+                if float(msg['ts']) - last_ts >= 30 * 60:
+                    message_bits.append("<hr>")
+                last_ts = float(msg['ts'])
 
-        # render the messages
-        message_bits = []
-        last_ts = float(messages[0]['ts'])
-        for msg in messages:
-            # break up conversations
-            if float(msg['ts']) - last_ts >= 30 * 60:
-                message_bits.append("<hr>")
-            last_ts = float(msg['ts'])
-
-            message_bits.append(self.render_message(msg))
+                message_bits.append(self.render_message(msg))
 
         # finalize
         return self.templates['full_html'].render(
             header_text=header_text,
             messages="\n".join(message_bits),
+            visit_url="https://%s.slack.com" % self.scraper.get_team_subdomain(),
+            invite_url=self.scraper.get_invite_link(),
         )

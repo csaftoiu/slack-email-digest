@@ -47,12 +47,16 @@ class EmailRenderer:
 
         return len(msg.as_string()) + header_size
 
-    def _render_message_part(self, part_messages, part_i, num_parts):
-        header_text = self.renderer.render_header_text(part_messages, part=part_i, parts=num_parts)
-        html = self.renderer.render_messages(part_messages, part=part_i)
+    def _render_message_part(self, date, part_messages, part_i, num_parts):
+        subject = self.renderer.render_header_text(part_messages, part=part_i, parts=num_parts,
+                                                   date_hint=date, short=True)
+        text_body = self.renderer.render_header_text(part_messages, part=part_i, parts=num_parts,
+                                                     date_hint=date)
+        html = self.renderer.render_messages(part_messages, part=part_i, parts=num_parts)
 
         # subject should have no special characters
-        subject = text_body = header_text.encode('ascii').decode('ascii')
+        subject = subject.encode('ascii').decode('ascii')
+        text_body = text_body.encode('ascii').decode('ascii')
         # xmlcharref-encode everything to avoid encoding issues
         html_body = html.encode('ascii', 'xmlcharrefreplace').decode('ascii')
 
@@ -66,9 +70,9 @@ class EmailRenderer:
             'custom_headers': {},
         }
 
-    def _render_messages_in_parts(self, messages, num_parts):
+    def _render_messages_in_parts(self, date, messages, num_parts):
         """Render messages into given number of parts."""
-        return [self._render_message_part(part_messages, part_i, num_parts)
+        return [self._render_message_part(date, part_messages, part_i, num_parts)
                 for part_i, part_messages in enumerate(n_even_chunks(messages, num_parts))]
 
     def render_digest_emails(self, messages, date, team_id, channel_id):
@@ -90,23 +94,25 @@ class EmailRenderer:
         :param channel_id: The channel id the messages came from, used for
             consistent threading.
         """
-        if not messages:
-            raise NotImplementedError("No messages NYI")
+        if messages:
+            # split into evenly-sized chunks until all are under the size limit
+            num_parts = 0
+            parts = []
+            while True:
+                num_parts += 1
+                if num_parts > len(messages):
+                    raise ValueError("Have one too-large message, cannot split further")
 
-        # split into evenly-sized chunks until all are under the size limit
-        num_parts = 0
-        parts = []
-        while True:
-            num_parts += 1
-            if num_parts > len(messages):
-                raise ValueError("Have one too-large message, cannot split further")
-
-            parts = self._render_messages_in_parts(messages, num_parts)
-            # estimate, decoding with ascii should work as per how messages are rendered
-            if all(self.estimate_email_size(part['html_body'],
-                                            part['text_body']) <= self.max_email_size
-                   for part in parts):
-                break
+                parts = self._render_messages_in_parts(date, messages, num_parts)
+                # estimate, decoding with ascii should work as per how messages are rendered
+                if all(self.estimate_email_size(part['html_body'],
+                                                part['text_body']) <= self.max_email_size
+                       for part in parts):
+                    break
+        else:
+            # no messages - just one part which displays the fact
+            num_parts = 1
+            parts = [self._render_message_part(date, [], 0, 1)]
 
         # chain the messages so they reply to each other
         def part_message_id(part_i):
