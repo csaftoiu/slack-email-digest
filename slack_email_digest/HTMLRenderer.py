@@ -328,7 +328,6 @@ class HTMLRenderer:
             message_bits = []
         else:
             # format header
-            print(part, parts)
             header_text = self.render_header_text(messages, part=part, parts=parts)
 
             # render the messages
