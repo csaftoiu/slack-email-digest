@@ -123,9 +123,12 @@ class EmailRenderer:
 
         for i, part in enumerate(parts):
             part['custom_headers']['Message-ID'] = part_message_id(i)
-            if i == 0 and date.day > 1:
-                part['custom_headers']['In-Reply-To'] = self.get_message_id(
-                    'last', date - datetime.timedelta(days=1), team_id, channel_id,
-                )
+            if i > 0:
+                part['custom_headers']['In-Reply-To'] = part_message_id(i - 1)
+            else:
+                if date.day > 1:
+                    part['custom_headers']['In-Reply-To'] = self.get_message_id(
+                        'last', date - datetime.timedelta(days=1), team_id, channel_id,
+                    )
 
         return parts
