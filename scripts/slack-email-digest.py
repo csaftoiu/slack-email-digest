@@ -11,13 +11,20 @@ Options:
     -c --config=<file.ini>   INI file to use for configuration
     -v --verbose             Whether to provide verbose output
 
+Slack Options:
     -t --token=<token>       Slack API token to use
     --channel=<name>         Channel to export. [default: general]
+
+Exporting Options:
+    --invite-link=<url>      If provided, a message will be rendered in the
+                             header inviting readers to click on the link
+                             to get an invite to the Slack team.
     --date=<YYYY-mm-dd>      Date to export in YYYY-mm-dd format.
                              Defaults to yesterday. Messages are exported
                              from the start of the day to the end of the
                              day, in UTC.
 
+Mailing Options:
     --from=<name>            Email to send from.
     --to=<email>             Destination email.
     --delay=<seconds>        Number of seconds to wait in between
@@ -183,6 +190,7 @@ def main():
     from_name = args['--from-name']
     delay = int(args['--delay'])
     slack_channel = args['--channel']
+    invite_link = args['--invite-link']
 
     if delivery not in delivery_methods:
         sys.exit("Unknown delivery method: %s" % (delivery,))
@@ -195,6 +203,7 @@ def main():
         ), file=sys.stderr)
 
     scraper = SlackScraper(token, verbose=verbose)
+    scraper.set_invite_link(invite_link)
     team_id = scraper.get_team_id()
     channel_id = scraper.get_channel_id(slack_channel)
 
