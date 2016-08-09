@@ -25,6 +25,7 @@ Exporting Options:
                              day, in UTC.
     --timezone=<tz>          Timezone to use for start and end
                              of day and to display messages in.
+                             This is passed into pytz.timezone() .
                              [default: UTC]
 
 Mailing Options:
