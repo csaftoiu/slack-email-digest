@@ -5,6 +5,7 @@ import re
 import emoji
 import jinja2
 import pyshorteners
+import pytz
 
 from .memoize import memoize1_to_json_file
 
@@ -98,9 +99,10 @@ class HTMLRenderer:
     """Given a SlackScraper, render messages to HTML suitable for display in
     an email client.
     """
-    def __init__(self, scraper, redact_users=None):
+    def __init__(self, scraper, timezone, redact_users=None):
         """
         :param scraper: A SlackScraper to get channel names, user names, etc.
+        :param timezone: Timezone info to render messages in
         :param redact_users: List of users to redact. Defaults to ['mailclark'] to avoid
             recursion.
         :param redact_avatars: List of users whose avatar not to include. Defaults to nobody.
@@ -108,6 +110,7 @@ class HTMLRenderer:
         self.redact_users = redact_users or ['mailclark']
 
         self.scraper = scraper
+        self.timezone = timezone
 
         self.env = jinja2.Environment()
         self.env.filters['username'] = self.filter_username
@@ -249,6 +252,7 @@ class HTMLRenderer:
             )
 
         message_utc_dt = datetime.datetime.utcfromtimestamp(float(msg['ts']))
+        message_dt = pytz.utc.localize(message_utc_dt).astimezone(self.timezone)
 
         text = self.process_text(text)
 
@@ -273,7 +277,7 @@ class HTMLRenderer:
 
         return self.templates[which].render(
             user=username,
-            timestamp=message_utc_dt.strftime("%I:%M %p"),
+            timestamp=message_dt.strftime("%I:%M %p"),
             avatar=self.avatars.get(username, None),  # bot users won't have an avatar
             text=text,
         )
@@ -299,7 +303,9 @@ class HTMLRenderer:
 
         # get boundary datetimes
         start_dt = datetime.datetime.utcfromtimestamp(min(float(msg['ts']) for msg in messages))
+        start_dt = pytz.utc.localize(start_dt).astimezone(self.timezone)
         end_dt = datetime.datetime.utcfromtimestamp(max(float(msg['ts']) - 1 for msg in messages))
+        end_dt = pytz.utc.localize(end_dt).astimezone(self.timezone)
 
         # format the boundaries
         start = start_dt.strftime(date_fmt)
@@ -312,7 +318,7 @@ class HTMLRenderer:
             date_str = "%s to %s" % (start, end)
 
         # add timezone
-        date_str = "%s (UTC)" % (date_str,)
+        date_str = "%s (%s)" % (date_str, start_dt.strftime("%Z"))
 
         return self.templates['header_text'].render(date=date_str, part=part, parts=parts)
 
