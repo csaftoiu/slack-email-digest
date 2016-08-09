@@ -178,11 +178,12 @@ def main():
     # the proper timestamps (which are always UTC)
     if args['--date']:
         date = datetime.datetime.strptime(args['--date'], '%Y-%m-%d')
+        date = tz.localize(date)
     else:
-        date = datetime.datetime.utcfromtimestamp(time.time()) - datetime.timedelta(days=1)
-        date = date.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    date = tz.localize(date)
+        now_utc = pytz.utc.localize(datetime.datetime.utcfromtimestamp(time.time()))
+        now_tz = now_utc.astimezone(tz)
+        yesterday_tz = now_tz - datetime.timedelta(days=1)
+        date = yesterday_tz.replace(hour=0, minute=0, second=0, microsecond=0)
 
     start_ts = calendar.timegm(date.utctimetuple())
     end_ts = calendar.timegm((date + datetime.timedelta(days=1)).utctimetuple())
