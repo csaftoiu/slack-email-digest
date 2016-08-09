@@ -23,6 +23,10 @@ Exporting Options:
                              Defaults to yesterday. Messages are exported
                              from the start of the day to the end of the
                              day, in UTC.
+    --timezone=<tz>          Timezone to use for start and end
+                             of day and to display messages in.
+                             This is passed into pytz.timezone() .
+                             [default: UTC]
 
 Mailing Options:
     --from=<name>            Email to send from.
@@ -54,6 +58,7 @@ import time
 from clint.textui import progress
 from docoptcfg import docoptcfg
 from postmark import PMMail
+import pytz
 
 from slack_email_digest import SlackScraper, HTMLRenderer, EmailRenderer
 
@@ -166,13 +171,19 @@ def main():
     args = docoptcfg(__doc__, env_prefix="SLACKEMAILDIGEST_", config_option='--config')
 
     # process args
+    tz_str = args['--timezone']
+    tz = pytz.timezone(tz_str)
+
     # for date, make naive timetuples, use calendar.timegm to convert them to
     # the proper timestamps (which are always UTC)
     if args['--date']:
         date = datetime.datetime.strptime(args['--date'], '%Y-%m-%d')
+        date = tz.localize(date)
     else:
-        date = datetime.datetime.utcfromtimestamp(time.time()) - datetime.timedelta(days=1)
-        date = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        now_utc = pytz.utc.localize(datetime.datetime.utcfromtimestamp(time.time()))
+        now_tz = now_utc.astimezone(tz)
+        yesterday_tz = now_tz - datetime.timedelta(days=1)
+        date = yesterday_tz.replace(hour=0, minute=0, second=0, microsecond=0)
 
     start_ts = calendar.timegm(date.utctimetuple())
     end_ts = calendar.timegm((date + datetime.timedelta(days=1)).utctimetuple())
@@ -196,10 +207,12 @@ def main():
         sys.exit("Unknown delivery method: %s" % (delivery,))
 
     # scrape
-    print("Fetching Slack messages for #%s from %s (UTC) to %s (UTC) " % (
+    print("Fetching Slack messages for #%s from %s (%s) to %s (%s) " % (
         slack_channel,
-        datetime.datetime.utcfromtimestamp(start_ts),
-        datetime.datetime.utcfromtimestamp(end_ts),
+        pytz.utc.localize(datetime.datetime.utcfromtimestamp(start_ts)).astimezone(tz),
+        pytz.utc.localize(datetime.datetime.utcfromtimestamp(start_ts)).astimezone(tz).strftime("%Z"),
+        pytz.utc.localize(datetime.datetime.utcfromtimestamp(end_ts)).astimezone(tz),
+        pytz.utc.localize(datetime.datetime.utcfromtimestamp(end_ts)).astimezone(tz).strftime("%Z"),
         ), file=sys.stderr)
 
     scraper = SlackScraper(token, verbose=verbose)
@@ -209,11 +222,12 @@ def main():
 
     hist = scraper.get_channel_history(
         slack_channel,
-        oldest=start_ts, latest=end_ts)
+        oldest=start_ts, latest=end_ts,
+    )
 
     hist.sort(key=lambda msg: float(msg['ts']))
 
-    html_renderer = HTMLRenderer(scraper)
+    html_renderer = HTMLRenderer(scraper, tz)
     email_renderer = EmailRenderer(html_renderer)
 
     # render emails, replying to the last day's digest, and setting the last
