@@ -135,16 +135,6 @@ class HTMLRenderer:
         def sub_channel(m):
             return self.templates['channel_ref'].render(channel=self.scraper.get_channel_name(m.group(1)))
 
-        def sub_custom_emoji(m, big=False):
-            text = m.group(1)
-            if text[1:-1] in self.scraper.emojis:
-                return '<img width="%s" src="%s" title="%s">' % (
-                    32 if big else 20,
-                    self.scraper.emojis[text[1:-1]],
-                    text,
-                )
-            return text
-
         # # first all the < ... > specials
         # sub @ references without username
         text = re.sub(r'<@(\w+)>', sub_at, text)
@@ -169,8 +159,8 @@ class HTMLRenderer:
             return lambda m: self.templates[which].render(text=m.group(1), after=m.group(2))
 
         # multi-line blockquotes
-        text = re.sub(r'&gt;&gt;&gt;(.*)', lambda m: '<blockquote>%s</blockquote>' % m.group(1), text,
-                      flags=re.DOTALL)
+        text = re.sub(r'^\W*&gt;&gt;&gt;(.*)', lambda m: '<blockquote>%s</blockquote>' % m.group(1), text,
+                      flags=re.DOTALL | re.MULTILINE)
 
         # multi-tick
         text = re.sub(r'```\n?(.*)```()', sub_fmt('pre'), text, flags=re.DOTALL)
@@ -185,7 +175,8 @@ class HTMLRenderer:
         text = re.sub(r'`(\w[^`]+)`(\b|\W|$)', sub_fmt('code'), text)
 
         # blockquotes
-        text = re.sub(r"\n?&gt;(.*\w.*)\n?\n?", lambda m: '<blockquote>%s</blockquote>' % (m.group(1),), text)
+        text = re.sub(r"\n?^\W*&gt;(.*\w.*)\n?\n?", lambda m: '<blockquote>%s</blockquote>' % (m.group(1),), text,
+                      flags=re.MULTILINE)
 
         # newline
         text = text.replace('\n', '<br>')
@@ -201,14 +192,31 @@ class HTMLRenderer:
             else:
                 return text
 
+        # first, standard emoji
         text = re.sub(r'(:[a-zA-Z0-9\+\-_&.ô’Åéãíç]+:)', sub_standard_emoji, text)
 
-        # text = emoji.emojize(text, use_aliases=True)
-        # custom emojis
+        # then, custom emojis
+        # hackily replace colons in the title, so they don't get re-replaced
+        # by an image later.
+        HACKY_COLON_SUB = "---- pleaze < > forgive < > me ----04QQ!!!{{{"
+
+        def sub_custom_emoji(m, big=False):
+            text = m.group(1)
+            if text[1:-1] in self.scraper.emojis:
+                return '<img width="%s" src="%s" title="%s">' % (
+                    32 if big else 20,
+                    self.scraper.emojis[text[1:-1]],
+                    text.replace(":", HACKY_COLON_SUB),
+                )
+            return text
+
         # nothing but whitespace - big emoji
         text = re.sub(r'^\W*(:[a-zA-Z0-9\+\-_&.ô’Åéãíç]+:)\W*$', lambda m: sub_custom_emoji(m, True), text)
         # otherwise, small emoji
         text = re.sub(r'(:[a-zA-Z0-9\+\-_&.ô’Åéãíç]+:)', sub_custom_emoji, text)
+
+        # fix the colon preserving hack
+        text = text.replace(HACKY_COLON_SUB, ":")
 
         return text
 
