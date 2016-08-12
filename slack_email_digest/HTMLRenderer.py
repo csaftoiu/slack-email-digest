@@ -65,6 +65,19 @@ Slack Digest for {{ date }}{% if parts > 1 %} [Part {{ part + 1 }} of {{ parts }
     'pre': """\
 <pre style="margin: .5rem 0 .2rem; border: 1px solid rgba(0, 0, 0, .15);">{{ text }}</pre>{{ after }}\
 """,
+    # don't use <blockquote> as email clients don't show it nicely
+    'blockquote': """\
+<div style="margin: 10px 0px; padding: 5px 10px; border-left: 5px solid #ccc">{{ text }}</div>{{ after }}\
+""",
+    'bold': """\
+<b>{{ text }}</b>{{ after }}\
+""",
+    'italic': """\
+<i>{{ text }}</i>{{ after }}\
+""",
+    'strikethrough': """\
+<strike>{{ text }}</strike>{{ after }}\
+""",
 }
 
 
@@ -159,24 +172,22 @@ class HTMLRenderer:
             return lambda m: self.templates[which].render(text=m.group(1), after=m.group(2))
 
         # multi-line blockquotes
-        text = re.sub(r'^\W*&gt;&gt;&gt;(.*)', lambda m: '<blockquote>%s</blockquote>' % m.group(1), text,
-                      flags=re.DOTALL | re.MULTILINE)
+        text = re.sub(r'^\W*&gt;&gt;&gt;(.*)()', sub_fmt('blockquote'), text, flags=re.DOTALL | re.MULTILINE)
 
         # multi-tick
         text = re.sub(r'```\n?(.*)```()', sub_fmt('pre'), text, flags=re.DOTALL)
 
         # bold
-        text = re.sub(r'\*(\w[^\*]+)\*(\b|\W|$)', lambda m: '<b>%s</b>%s' % (m.group(1), m.group(2)), text)
+        text = re.sub(r'\*(\w[^\*]+)\*(\b|\W|$)', sub_fmt('bold'), text)
         # italic
-        text = re.sub(r'_(\w[^_]+)_(\b|\W|$)', lambda m: '<i>%s</i>%s' % (m.group(1), m.group(2)), text)
+        text = re.sub(r'_(\w[^_]+)_(\b|\W|$)', sub_fmt('italic'), text)
         # strike-through
-        text = re.sub(r'~(\w[^~]+\w)~(\b|\W|$)', lambda m: '<strike>%s</strike>%s' % (m.group(1), m.group(2)), text)
+        text = re.sub(r'~(\w[^~]+\w)~(\b|\W|$)', sub_fmt('strikethrough'), text)
         # tick
         text = re.sub(r'`(\w[^`]+)`(\b|\W|$)', sub_fmt('code'), text)
 
         # blockquotes
-        text = re.sub(r"\n?^\W*&gt;(.*\w.*)\n?\n?", lambda m: '<blockquote>%s</blockquote>' % (m.group(1),), text,
-                      flags=re.MULTILINE)
+        text = re.sub(r"\n?^\W*&gt;(.*\w.*)\n?\n?()", sub_fmt('blockquote'), text, flags=re.MULTILINE)
 
         # newline
         text = text.replace('\n', '<br>')
@@ -272,12 +283,13 @@ class HTMLRenderer:
                 attachment = dict(attachment)  # copy
                 text += "<br><br><span style='color: #777'>Attachment:</span>"
                 if attachment.get('is_msg_unfurl'):
-                    text += "<blockquote>%s</blockquote>" % self.render_message({
+                    # render messages as blockquotes
+                    text += self.templates['blockquote'].render(text=self.render_message({
                         'text': attachment['text'],
                         'ts': attachment['ts'],
                         'type': 'message',
                         '_override_username': attachment['author_subname'],
-                    })
+                    }))
                 else:
                     if 'text' in attachment.get('mrkdwn_in', []):
                         attachment['text'] = self.process_text(attachment['text'])
