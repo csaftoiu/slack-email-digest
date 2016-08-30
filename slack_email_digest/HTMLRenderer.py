@@ -231,6 +231,20 @@ class HTMLRenderer:
 
         return text
 
+    def _render_reactions(self, reactions, text="Reactions"):
+        if not reactions:
+            return ""
+
+        # use process_text to help with the emojis
+        return "<span style='color: #777;'>(%s: %s)</span>" % (
+            text, self.process_text(
+                ", ".join(":%s: %s from %s" % (
+                    reaction['name'], ("x%d " % len(reaction['users'])) if len(reaction['users']) > 1 else '',
+                    ", ".join("<@%s>" % user for user in reaction['users'])
+                ) for reaction in reactions)
+            )
+        )
+
     def render_message(self, msg):
         """Render a message. Also recursively called with 'fake' messages to render attachments.
         :param msg: The message, from Slack, to render. Only difference from that returned
@@ -245,6 +259,8 @@ class HTMLRenderer:
         elif 'bot_id' in msg:
             bot_username = msg['username'] if 'username' in msg else self.scraper.get_bot_name(msg['bot_id'])
             username = "%s (BOT)" % bot_username
+        elif msg.get('subtype') == 'file_comment':
+            username = self.scraper.get_username(msg['comment']['user'])
         else:
             raise ValueError("Don't know how to handle this message:\n%s" % (pprint.pformat(msg),))
 
@@ -258,22 +274,28 @@ class HTMLRenderer:
             if username in self.redact_users:
                 redact = True
 
+        # process markdown
         if redact:
             text = "<i>[redacted]</i>"
+        else:
+            text = self.process_text(text)
 
         # append reactions
-        if msg.get('reactions'):
-            text += "\n<span style='color: #777;'>(Reactions: %s)</span>" % (
-                ", ".join(":%s: %s from %s" % (
-                    reaction['name'], ("x%d " % len(reaction['users'])) if len(reaction['users']) > 1 else '',
-                    ", ".join("<@%s>" % user for user in reaction['users'])
-                ) for reaction in msg['reactions'])
-            )
+        reactions = msg.get('reactions')
+        if msg.get('subtype') == 'file_comment':
+            reactions = msg['comment'].get('reactions')
+        if reactions:
+            text += "<br>" + self._render_reactions(reactions)
 
-        message_utc_dt = datetime.datetime.utcfromtimestamp(float(msg['ts']))
-        message_dt = pytz.utc.localize(message_utc_dt).astimezone(self.timezone)
-
-        text = self.process_text(text)
+        # file share, append preview
+        if msg.get('subtype') == 'file_share' and msg['file'].get('preview'):
+            if redact:
+                text += "<br><br><span style='color: #777'>File preview redacted.</span>"
+            else:
+                text += "<br><br><span style='color: #777'>File preview:</span><br>%s" % (
+                    self.templates['blockquote'].render(text=msg['file']['preview']),
+                )
+                text += self._render_reactions(msg['file'].get('reactions'), "File reactions")
 
         # attachments
         if redact:
@@ -295,6 +317,9 @@ class HTMLRenderer:
                         attachment['text'] = self.process_text(attachment['text'])
                     text += "<br>" + self.templates['attachment'].render(**attachment)
 
+        # render template
+        message_utc_dt = datetime.datetime.utcfromtimestamp(float(msg['ts']))
+        message_dt = pytz.utc.localize(message_utc_dt).astimezone(self.timezone)
         return self.templates[which].render(
             user=username,
             timestamp=message_dt.strftime("%I:%M %p"),
@@ -365,7 +390,23 @@ class HTMLRenderer:
                     message_bits.append("<hr>")
                 last_ts = float(msg['ts'])
 
-                message_bits.append(self.render_message(msg))
+                try:
+                    this_bit = self.render_message(msg)
+                except Exception as e:
+                    import traceback
+                    print("ERROR handling message!\n%s" % (traceback.format_exc()))
+                    this_bit = "&lt;ERROR HANDLING MESSAGE -- please alert your local programmer!&gt;<br>%s" % (
+                        self.templates['pre'].render(text=traceback.format_exc()
+                            .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                                                     ),
+                    )
+                    # format it as a message
+                    this_bit = self.templates['message'].render(
+                        user="ERROR",
+                        text=this_bit,
+                    )
+
+                message_bits.append(this_bit)
 
         # finalize
         return self.templates['full_html'].render(
