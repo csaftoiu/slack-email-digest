@@ -20,6 +20,7 @@ setup(
         'docoptcfg(>=1.0.2)',
         'clint(>=0.5.1)',
         'python-postmark(>=0.4.3)',
+        'sendgrid(>=5.3.0)',
     ],
 
     packages=[],

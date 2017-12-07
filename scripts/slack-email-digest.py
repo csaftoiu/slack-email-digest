@@ -37,7 +37,8 @@ Mailing Options:
                              as "Name <foo@foo.com>"
                              [default: Slack DigestBot]
     --delivery=<method>      Delivery method. Valid options
-                             are "stdout", "local_files", "smtp", "postmark".
+                             are "stdout", "local_files", "smtp", "postmark",
+                             "sendgrid".
                              See delivery options for more.
                              [default: stdout]
 
@@ -57,7 +58,6 @@ import time
 
 from clint.textui import progress
 from docoptcfg import docoptcfg
-from postmark import PMMail
 import pytz
 
 from slack_email_digest import SlackScraper, HTMLRenderer, EmailRenderer
@@ -115,6 +115,7 @@ def deliver_postmark(args, email):
     if not os.environ.get('POSTMARK_API_TOKEN'):
         sys.exit("Missing POSTMARK_API_TOKEN variable")
 
+    from postmark import PMMail
     message = PMMail(
         api_key=os.environ.get('POSTMARK_API_TOKEN'),
         subject=email['subject'],
@@ -127,6 +128,41 @@ def deliver_postmark(args, email):
     )
 
     message.send()
+
+
+@delivery_methods.register('sendgrid')
+def deliver_sendgrid(args, email):
+    if not os.environ.get('SENDGRID_API_KEY'):
+        sys.exit("Missing SENDGRID_API_KEY variable")
+
+    import sendgrid
+    sg = sendgrid.SendGridAPIClient(apikey=os.environ.get('SENDGRID_API_KEY'))
+    data = {
+        "personalizations": [
+            {
+                "to": [
+                    {
+                        "email": email['to']
+                    }
+                ],
+                "subject": email['subject']
+            }
+        ],
+        "from": {
+            "email": email['sender']
+        },
+        "content": [
+            {
+                "type": "text/plain",
+                "value": email['text_body']
+            },
+            {
+                "type": "text/html",
+                "value": email['html_body']
+            }
+        ]
+    }
+    response = sg.client.mail.send.post(request_body=data)
 
 
 @delivery_methods.register('smtp')
@@ -241,8 +277,8 @@ def main():
 
     delivery_method = delivery_methods[delivery]
     print("Delivering in %d parts... via %s" % (len(emails), delivery_method.__name__), file=sys.stderr)
-    
-    for email in emails:    
+
+    for email in emails:
         delivery_method(args, email)
         for _ in progress.bar(range(delay), label="Waiting to send next message... "):
             time.sleep(1)
